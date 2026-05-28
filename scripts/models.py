@@ -7,6 +7,7 @@ class RawPost:
     url: str
     post_type: str  # text | image | mixed
     raw_text: str
+    posted_at: str | None = None  # ISO YYYY-MM-DD, or None if source has no date
     asset_paths: list[str] = field(default_factory=list)
     comments: list[str] = field(default_factory=list)
 
@@ -23,6 +24,7 @@ class Question:
     text: str
     source_refs: list[str] = field(default_factory=list)
     freq: int = 1
+    latest_posted_at: str | None = None  # most recent posted_at among merged duplicates
     role_tags: list[str] = field(default_factory=list)
     topic: str = ""
     modality_origin: str = "text"  # text | ocr | vision
