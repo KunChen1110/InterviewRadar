@@ -16,8 +16,22 @@
 # 默认路径是 ~/.mediacrawler/。也可以装到任意位置,然后 export MEDIACRAWLER_HOME=<path>
 git clone https://github.com/NanmiCoder/MediaCrawler.git ~/.mediacrawler
 cd ~/.mediacrawler
-# 按它 README 装依赖(一般是 pip install -r requirements.txt 或 uv sync)
+
+# 用 Python 3.11(它 requirements.txt 锁的版本)
+python3.11 -m venv venv
+venv/bin/pip install -r requirements.txt
+venv/bin/playwright install chromium
 ```
+
+### 1.5. 关掉默认的 CDP 模式(重要)
+
+MediaCrawler 默认 `ENABLE_CDP_MODE = True`,会尝试连接你**已经开着**的 Chrome(端口 9222),不开就报 "CDP port 9222 is not accessible" 死循环。改成 False 让它用自带的 Playwright Chromium:
+
+```bash
+sed -i '' 's/^ENABLE_CDP_MODE = True/ENABLE_CDP_MODE = False/' config/base_config.py
+```
+
+(macOS sed 语法;Linux 用 `sed -i 's/.../.../' config/base_config.py`。)
 
 ### 2. 扫码登录一次
 
