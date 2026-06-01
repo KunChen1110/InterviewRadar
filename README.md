@@ -27,7 +27,7 @@ InterviewRadar 是一个 Claude Skill,把"你给的"变成"它给你的":
 
 | 你给的 | 它做的 | 它给你的 |
 |---|---|---|
-| • 简历(PDF / 图片 / 扫描件)<br>• 一句**模糊**岗位方向<br>&nbsp;&nbsp;&nbsp;&nbsp;(例:"AI 应用开发""市场实习") | • 多源抓取真实面经<br>&nbsp;&nbsp;&nbsp;&nbsp;(牛客 + 小红书 + GitHub + 公开博客)<br>• 近两年时效**硬过滤**<br>• 频次 × 时效加权排序<br>• 把每道高频题尝试**挂到你简历里的项目**上<br>• LLM 推理 + Python 脚本各司其职<br>&nbsp;&nbsp;&nbsp;&nbsp;(领域无关,不依赖预设词表) | • 一份中文 Markdown **备考包**<br>• **可追溯**的、锚定到你项目的<br>&nbsp;&nbsp;&nbsp;&nbsp;**连环追问链**,而不是凭空编<br>• **任意领域**都能跑——不止 AI 岗 |
+| • 简历(PDF / 图片 / 扫描件)<br>• 一句**模糊**岗位方向<br>&nbsp;&nbsp;&nbsp;&nbsp;(例:"AI 应用开发""市场实习") | • 多源抓取真实面经<br>&nbsp;&nbsp;&nbsp;&nbsp;(牛客 + GitHub + 公开博客)<br>• 近两年时效**硬过滤**<br>• 频次 × 时效加权排序<br>• 把每道高频题尝试**挂到你简历里的项目**上<br>• LLM 推理 + Python 脚本各司其职<br>&nbsp;&nbsp;&nbsp;&nbsp;(领域无关,不依赖预设词表) | • 一份中文 Markdown **备考包**<br>• **可追溯**的、锚定到你项目的<br>&nbsp;&nbsp;&nbsp;&nbsp;**连环追问链**,而不是凭空编<br>• **任意领域**都能跑——不止 AI 岗 |
 
 ## 看一眼输出
 
@@ -88,16 +88,29 @@ Claude 会自动:
 5. 项目锚定生成追问链
 6. 输出中文备考包到 `corpus_cache/prep_package.md`
 
-### 数据源说明
+### 默认数据源(零配置)
 
-| 源 | 开箱可用 | 备注 |
-|---|---|---|
-| 牛客(NowCoder) | ✅ | 直接抓公开 discuss 页 |
-| GitHub | ✅ | 公开 raw markdown |
-| 知乎 / CSDN / 博客类 | ✅ | 通过 Claude 的 WebFetch |
-| 小红书(Xiaohongshu) | ❌ 需要额外装外部工具 | 反爬严,需用户自己装 [MediaCrawler](https://github.com/NanmiCoder/MediaCrawler) 并手动跑一次采集,本 skill 只读它的 JSON 导出。流程见 [`docs/setup/mediacrawler.md`](docs/setup/mediacrawler.md) |
+| 源 | 拿到什么 |
+|---|---|
+| 牛客(NowCoder) | 真实面经帖,带 createTime |
+| GitHub | 主流面经仓库的 markdown 题库 |
+| 知乎 / CSDN / 博客类 | 通过 Claude 的 WebFetch 拉正文页 |
 
-> 不接小红书也能跑,只是少一个高时效源。多数场景牛客 + GitHub + 博客类已经够用。
+主流程已覆盖中文圈 90%+ 高频面经源,跑起来不需要任何额外配置。
+
+<details>
+<summary><b>(进阶,可选)接入小红书源</b></summary>
+
+小红书面经笔记很多,但平台反爬严,**没法直接抓**。如果想接入:
+
+1. 自己装 [MediaCrawler](https://github.com/NanmiCoder/MediaCrawler)(它是一个开源浏览器爬虫工具)
+2. 用 MediaCrawler 扫码登录小红书(**必须一次手动扫码**,这步无法自动化)
+3. 用 MediaCrawler 跑一次关键词采集,产出一份 JSON
+4. 用本 skill 自带的适配器把 JSON 喂进来
+
+详细流程见 [`docs/setup/mediacrawler.md`](docs/setup/mediacrawler.md)。MediaCrawler 仅供个人非商用。
+
+</details>
 
 ## 它怎么工作
 
@@ -153,7 +166,7 @@ flowchart TD
 | 个性化 | ❌ 不看你简历 | ⚠️ 听起来像但不溯源 | ✅ 项目锚定 + `is_grounded` 标记 |
 | 可追溯 | ✅ 但散落 | ❌ 编的就是编的 | ✅ 每条题 / 追问都带源链接 |
 | 跨领域 | ❌ 一仓一岗 | ✅ | ✅(不依赖预设词表) |
-| 多源 | ❌ 单一 | ❌ 不爬 | ✅ 牛客 / 小红书 / GitHub / 通用正文页 |
+| 多源 | ❌ 单一 | ❌ 不爬 | ✅ 牛客 / GitHub / 通用正文页(小红书可选) |
 
 ## 项目结构
 
