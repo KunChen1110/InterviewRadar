@@ -1,7 +1,6 @@
 <div align="center">
 
-<!-- 等你 GPT 出图后,把 assets/logo.png 替换这一行,或直接删掉这块也行 -->
-<img src="assets/logo.png" alt="InterviewRadar" width="180" onerror="this.style.display='none'"/>
+<img src="assets/logo.png" alt="InterviewRadar" width="200"/>
 
 # InterviewRadar · 面试雷达
 
@@ -87,6 +86,13 @@ Claude 会自动:
 
 ## 它怎么工作
 
+<div align="center">
+  <img src="assets/workflow.png" alt="InterviewRadar workflow" width="900"/>
+</div>
+
+<details>
+<summary>等价的 Mermaid 流程图(技术细节)</summary>
+
 ```mermaid
 flowchart TD
     R["简历 PDF / 图片"] --> A
@@ -116,6 +122,8 @@ flowchart TD
     class C1,C2,C3,C4 src
     class OUT out
 ```
+
+</details>
 
 **分工原则**:
 - agent(Claude)做**推理判断**:领域知识、种子词生成、URL 分桶、项目锚定
