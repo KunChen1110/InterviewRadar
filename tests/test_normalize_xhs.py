@@ -45,13 +45,14 @@ def test_synthesizes_url_from_note_id_when_url_missing():
     assert n3["note_url"] == "https://www.xiaohongshu.com/explore/n3"
 
 
-def test_drops_unknown_keys():
+def test_drops_unknown_keys_but_preserves_tags():
     out = normalize(_load())
     first = out[0]
     assert "liked_count" not in first
     assert "comments" not in first
     assert "tag_list" not in first
     assert "type" not in first
+    assert first["tags"] == ["面经", "实习"]
 
 
 def test_invalid_time_becomes_zero_and_null_image_list_becomes_empty():

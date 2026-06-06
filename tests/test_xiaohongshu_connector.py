@@ -36,7 +36,11 @@ def test_parse_zero_time_yields_none_date():
 
 
 def test_connector_search_uses_injected_loader():
-    conn = XiaohongshuConnector(export_path="whatever.json", loader=lambda p: SAMPLE_JSON)
+    conn = XiaohongshuConnector(
+        export_path="whatever.json",
+        loader=lambda p: SAMPLE_JSON,
+        enable_image_ocr=False,
+    )
     result = conn.search(["agent"])
     assert result.status == "ok"
     assert len(result.posts) == 2
@@ -47,7 +51,7 @@ def test_connector_degrades_when_loader_fails():
     def boom(path):
         raise FileNotFoundError("no export")
 
-    conn = XiaohongshuConnector(export_path="missing.json", loader=boom)
+    conn = XiaohongshuConnector(export_path="missing.json", loader=boom, enable_image_ocr=False)
     result = conn.search(["agent"])
     assert result.status == "degraded"
     assert result.posts == []
@@ -88,7 +92,7 @@ def test_connector_driver_mode_scrapes_and_returns_posts(tmp_path: Path):
         return _Result(returncode=0)
 
     driver = MediaCrawlerDriver(home=home, runner=fake_runner)
-    conn = XiaohongshuConnector(driver=driver)
+    conn = XiaohongshuConnector(driver=driver, enable_image_ocr=False)
     result = conn.search(["AI Agent"])
 
     assert result.status == "ok"
@@ -106,7 +110,7 @@ def test_connector_driver_mode_degrades_on_scrape_failure(tmp_path: Path):
         return _Result(returncode=1, stderr="login expired")
 
     driver = MediaCrawlerDriver(home=home, runner=boom)
-    conn = XiaohongshuConnector(driver=driver)
+    conn = XiaohongshuConnector(driver=driver, enable_image_ocr=False)
     result = conn.search(["foo"])
 
     assert result.status == "degraded"
@@ -118,7 +122,7 @@ def test_connector_driver_mode_degrades_on_scrape_failure(tmp_path: Path):
 def test_connector_driver_mode_requires_queries(tmp_path: Path):
     home = _make_driver_fake_home(tmp_path)
     driver = MediaCrawlerDriver(home=home, runner=lambda *a, **k: _Result(0))
-    conn = XiaohongshuConnector(driver=driver)
+    conn = XiaohongshuConnector(driver=driver, enable_image_ocr=False)
     result = conn.search([])
 
     assert result.status == "degraded"

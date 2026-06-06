@@ -43,6 +43,31 @@ def test_rawpost_has_optional_posted_at_defaulting_none():
     assert dated.posted_at == "2025-09-01"
 
 
+def test_rawpost_new_content_fields_default_from_raw_text():
+    post = RawPost("xiaohongshu", "u1", "image", "图片正文")
+    assert post.locator_text == "图片正文"
+    assert post.content_text == "图片正文"
+    assert post.image_ocr_text is None
+    assert post.needs_vision_fallback is False
+    assert post.extraction_quality == "text_only"
+
+
+def test_rawpost_from_dict_accepts_legacy_cache_without_new_fields():
+    post = RawPost.from_dict(
+        {
+            "source": "xiaohongshu",
+            "url": "u1",
+            "post_type": "image",
+            "raw_text": "旧缓存正文",
+            "asset_paths": [],
+            "comments": [],
+        }
+    )
+    assert post.locator_text == "旧缓存正文"
+    assert post.content_text == "旧缓存正文"
+    assert post.raw_text == "旧缓存正文"
+
+
 def test_question_has_optional_latest_posted_at_defaulting_none():
     q = Question("Q1", ["u1"])
     assert q.latest_posted_at is None

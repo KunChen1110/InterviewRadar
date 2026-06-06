@@ -25,6 +25,27 @@ def _coerce_image_list(value) -> list[str]:
     return []
 
 
+def _coerce_tags(note: dict) -> list[str]:
+    value = note.get("tags")
+    if value is None:
+        value = note.get("tag_list")
+    if value is None:
+        return []
+    if isinstance(value, list):
+        tags = []
+        for item in value:
+            if isinstance(item, dict):
+                item = item.get("name") or item.get("tag_name") or item.get("text")
+            text = str(item).strip()
+            if text:
+                tags.append(text)
+        return tags
+    if isinstance(value, str):
+        normalized = value.replace("#", ",").replace("，", ",")
+        return [part.strip() for part in normalized.split(",") if part.strip()]
+    return []
+
+
 def _coerce_time(value) -> int:
     if isinstance(value, int):
         return value
@@ -53,6 +74,7 @@ def normalize(notes: list[dict]) -> list[dict]:
                 "desc": note.get("desc") or "",
                 "time": _coerce_time(note.get("time")),
                 "image_list": _coerce_image_list(note.get("image_list")),
+                "tags": _coerce_tags(note),
             }
         )
     return out
