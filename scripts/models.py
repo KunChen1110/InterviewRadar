@@ -42,6 +42,21 @@ class RawPost:
 
 
 @dataclass
+class QuestionEvidence:
+    source_url: str
+    excerpt: str
+    posted_at: str | None = None
+    modality_origin: str = "text"  # text | ocr | vision
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "QuestionEvidence":
+        return cls(**d)
+
+
+@dataclass
 class Question:
     text: str
     source_refs: list[str] = field(default_factory=list)
@@ -51,13 +66,19 @@ class Question:
     topic: str = ""
     modality_origin: str = "text"  # text | ocr | vision
     canonical_text: str = ""  # short semantic intent used for cross-wording dedupe
+    evidence: list[QuestionEvidence] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
 
     @classmethod
     def from_dict(cls, d: dict) -> "Question":
-        return cls(**d)
+        data = dict(d)
+        data["evidence"] = [
+            item if isinstance(item, QuestionEvidence) else QuestionEvidence.from_dict(item)
+            for item in data.get("evidence", [])
+        ]
+        return cls(**data)
 
 
 @dataclass

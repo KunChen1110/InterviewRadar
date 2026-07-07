@@ -1,6 +1,7 @@
 import re
 from dataclasses import dataclass
 from datetime import date, datetime
+from typing import TypeVar
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from scripts.models import Question
@@ -14,6 +15,7 @@ _TRACKING_QUERY_KEYS = {
     "xsec_source",
     "xsec_token",
 }
+T = TypeVar("T")
 
 
 @dataclass(frozen=True)
@@ -30,7 +32,7 @@ def normalize(text: str) -> str:
     return " ".join(t.split())
 
 
-def _union(into: list[str], extra: list[str]) -> None:
+def _union(into: list[T], extra: list[T]) -> None:
     for item in extra:
         if item not in into:
             into.append(item)
@@ -124,6 +126,7 @@ def dedupe_and_rank(questions: list[Question], today: date | None = None) -> lis
                 topic=q.topic,
                 modality_origin=q.modality_origin,
                 canonical_text=q.canonical_text,
+                evidence=list(q.evidence),
             )
             order.append(key)
         else:
@@ -132,6 +135,7 @@ def dedupe_and_rank(questions: list[Question], today: date | None = None) -> lis
             m.latest_posted_at = _max_date(m.latest_posted_at, q.latest_posted_at)
             _union(m.source_refs, q.source_refs)
             _union(m.role_tags, q.role_tags)
+            _union(m.evidence, q.evidence)
             if not m.canonical_text and q.canonical_text:
                 m.canonical_text = q.canonical_text
 

@@ -1,6 +1,6 @@
 from datetime import date
 
-from scripts.models import Question
+from scripts.models import Question, QuestionEvidence
 from scripts.corpus.dedupe_rank import dedupe_and_rank, normalize, question_rank_score
 
 
@@ -97,6 +97,28 @@ def test_canonical_text_merges_paraphrased_questions():
     assert out[0].freq == 2
     assert out[0].source_refs == ["u1", "u2"]
     assert out[0].canonical_text == "评估招聘渠道"
+
+
+def test_canonical_merge_preserves_distinct_evidence():
+    qs = [
+        Question(
+            "如何评估招聘渠道？",
+            ["u1"],
+            canonical_text="评估招聘渠道",
+            evidence=[QuestionEvidence("u1", "如何评估招聘渠道？")],
+        ),
+        Question(
+            "招聘渠道应该怎么评估？",
+            ["u2"],
+            canonical_text="评估招聘渠道",
+            evidence=[QuestionEvidence("u2", "招聘渠道应该怎么评估？")],
+        ),
+    ]
+
+    out = dedupe_and_rank(qs, today=date(2026, 5, 28))
+
+    assert len(out[0].evidence) == 2
+    assert [item.source_url for item in out[0].evidence] == ["u1", "u2"]
 
 
 def test_independent_sources_outrank_repeats_from_one_source():

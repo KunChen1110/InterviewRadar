@@ -1,4 +1,4 @@
-from scripts.models import RawPost, Question, FollowUpChain
+from scripts.models import FollowUpChain, Question, QuestionEvidence, RawPost
 
 
 def test_rawpost_roundtrips_through_dict():
@@ -39,6 +39,32 @@ def test_question_from_legacy_dict_defaults_canonical_text():
     q = Question.from_dict({"text": "什么是 RAG？", "source_refs": ["u1"]})
 
     assert q.canonical_text == ""
+
+
+def test_question_roundtrips_with_structured_evidence():
+    q = Question(
+        "招聘渠道应该怎么评估？",
+        ["https://example.com/p1"],
+        evidence=[
+            QuestionEvidence(
+                source_url="https://example.com/p1",
+                excerpt="面试官问：招聘渠道应该怎么评估？",
+                posted_at="2026-05-01",
+                modality_origin="text",
+            )
+        ],
+    )
+
+    restored = Question.from_dict(q.to_dict())
+
+    assert restored == q
+    assert isinstance(restored.evidence[0], QuestionEvidence)
+
+
+def test_question_from_legacy_dict_defaults_evidence():
+    q = Question.from_dict({"text": "什么是 RAG？", "source_refs": ["u1"]})
+
+    assert q.evidence == []
 
 
 def test_followupchain_roundtrips_through_dict():

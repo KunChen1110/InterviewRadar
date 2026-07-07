@@ -5,12 +5,16 @@
   (ISO `YYYY-MM-DD`) or null for undated sources. Produced by connectors. Filtered to the recency
   window by `corpus/recency.py`. `raw_text` is the current best primary content for legacy pipeline
   compatibility; `locator_text` is source metadata for retrieval/filtering.
-- **Question** `{ text, canonical_text, source_refs[], freq, latest_posted_at(ISO date|null), role_tags[], topic, modality_origin(text|ocr|vision) }`
+- **QuestionEvidence** `{ source_url, excerpt, posted_at(ISO date|null), modality_origin(text|ocr|vision) }`
+  A verbatim source excerpt for one question occurrence. The quality pipeline verifies that the URL
+  belongs to a retained RawPost and that the whitespace-normalized excerpt appears in its primary
+  content. `posted_at` is synchronized from RawPost rather than trusted from Agent output.
+- **Question** `{ text, canonical_text, evidence[], source_refs[], freq, latest_posted_at(ISO date|null), role_tags[], topic, modality_origin(text|ocr|vision) }`
   A normalized interview question. `latest_posted_at` is the most recent date among merged
   duplicates. `canonical_text` is a short semantic intent used to merge wording variants while
   preserving technical entities and important conditions. Produced by the agent's extraction step
-  from RawPosts, then merged/ranked by independent source count and recency in
-  `corpus/dedupe_rank.py`; occurrence count only breaks ties.
+  from RawPosts, validated by `corpus/quality.py`, then merged/ranked by independent source count
+  and recency in `corpus/dedupe_rank.py`; occurrence count only breaks ties.
 - **FollowUpChain** `{ seed_question, resume_anchor, followups[], is_grounded }`
   A personalized follow-up chain. Produced by the agent's project-anchoring step.
   `is_grounded=false` means it degraded to a plain 八股 question (no resume anchor found).

@@ -27,7 +27,7 @@ InterviewRadar 是一个可给 Claude Code 或 Codex 使用的面试准备工作
 
 | 你给的 | 它做的 | 它给你的 |
 |---|---|---|
-| • 简历(PDF / 图片 / 扫描件)<br>• 一句**模糊**岗位方向<br>&nbsp;&nbsp;&nbsp;&nbsp;(例:"AI 应用开发""市场实习") | • 多源抓取真实面经<br>&nbsp;&nbsp;&nbsp;&nbsp;(牛客 + GitHub + 公开博客)<br>• 对明确日期执行近两年**硬过滤**<br>• 独立来源数 × 时效加权排序<br>• 无日期补充源保留但降权<br>• 把每道高频题尝试**挂到你简历里的项目**上<br>• LLM 推理 + Python 脚本各司其职<br>&nbsp;&nbsp;&nbsp;&nbsp;(领域无关,不依赖预设词表) | • 一份中文 Markdown **备考包**<br>• **可追溯**的、锚定到你项目的<br>&nbsp;&nbsp;&nbsp;&nbsp;**连环追问链**,而不是凭空编<br>• **任意领域**都能跑——不止 AI 岗 |
+| • 简历(PDF / 图片 / 扫描件)<br>• 一句**模糊**岗位方向<br>&nbsp;&nbsp;&nbsp;&nbsp;(例:"AI 应用开发""市场实习") | • 多源抓取真实面经<br>&nbsp;&nbsp;&nbsp;&nbsp;(牛客 + GitHub + 公开博客)<br>• 对明确日期执行近两年**硬过滤**<br>• 校验题目对应的原文证据片段<br>• 独立来源数 × 时效加权排序<br>• 无日期补充源保留但降权<br>• 把每道高频题尝试**挂到你简历里的项目**上<br>• LLM 推理 + Python 脚本各司其职<br>&nbsp;&nbsp;&nbsp;&nbsp;(领域无关,不依赖预设词表) | • 一份中文 Markdown **备考包**<br>• **可追溯**的、锚定到你项目的<br>&nbsp;&nbsp;&nbsp;&nbsp;**连环追问链**,而不是凭空编<br>• **任意领域**都能跑——不止 AI 岗 |
 
 ## 看一眼输出
 
@@ -109,9 +109,9 @@ Agent 会自动:
 1. 读简历(支持文字 PDF + 图片 + 扫描件)
 2. 用 WebSearch 发现牛客 / 公开正文页 URL
 3. 按域名分桶,调对应 connector 抓取
-4. 时效过滤(明确日期默认 730 天)+ 独立来源数×时效排序
-5. 项目锚定生成追问链
-6. 输出中文备考包到 `corpus_cache/prep_package.md`
+4. 校验题目 URL、原文片段和来源时效
+5. 按独立来源数×时效排序
+6. 项目锚定生成追问链并输出中文备考包
 
 ### 默认数据源(零配置)
 
@@ -220,7 +220,7 @@ flowchart TD
 |---|---|---|---|
 | 时效 | ❌ 经常陈旧 | ⚠️ 不可控 | ✅ 明确日期 730d 硬过滤;无日期降权 |
 | 个性化 | ❌ 不看你简历 | ⚠️ 听起来像但不溯源 | ✅ 项目锚定 + `is_grounded` 标记 |
-| 可追溯 | ✅ 但散落 | ❌ 编的就是编的 | ✅ 每条题 / 追问都带源链接 |
+| 可追溯 | ✅ 但散落 | ❌ 编的就是编的 | ✅ 源链接 + 原文证据片段校验 |
 | 跨领域 | ❌ 一仓一岗 | ✅ | ✅(不依赖预设词表) |
 | 多源 | ❌ 单一 | ❌ 不爬 | ✅ 牛客 / GitHub / 通用正文页(小红书可选) |
 
@@ -238,15 +238,16 @@ InterviewRadar/
 │   ├── corpus/
 │   │   ├── store.py             RawPost / Question 存取
 │   │   ├── recency.py           时效过滤(730d)
-│   │   └── dedupe_rank.py       规范问题去重 + 独立来源数×时效排序
+│   │   ├── dedupe_rank.py       规范问题去重 + 独立来源数×时效排序
+│   │   └── quality.py           原文证据校验 + 过滤排序入口
 │   ├── ocr/
 │   │   ├── extract.py           OCR + 视觉回退
 │   │   └── xhs_images.py        小红书图片下载 + OCR 拼接
 │   └── scrape/normalize_xhs.py  MediaCrawler 输出适配器
 ├── tests/                       单测(TDD)
 ├── docs/
-│   ├── specs/                   3 份设计文档
-│   ├── plans/                   6 份实施计划
+│   ├── specs/                   设计文档
+│   ├── plans/                   实施计划
 │   └── setup/mediacrawler.md    小红书源接入指引
 ├── examples/                    跑通的样例输出
 └── corpus_cache/                运行时产物(gitignored)
@@ -271,6 +272,7 @@ InterviewRadar/
 - [x] **小红书 live 采集**:MediaCrawler cookie driver 已接入,支持按关键词自动抓取小红书 notes JSON,并进入 `XiaohongshuConnector`。
 - [x] **小红书基础适配**:MediaCrawler 原生 JSON 已能 normalize 成 `RawPost`,支持标题、正文、时间戳、图片 URL。
 - [x] **Plan 7:小红书图片面经补全**:`image_list` 会按顺序下载到 `corpus_cache/assets/xhs/{note_id}/`,优先用图片 OCR 作为 `RawPost.raw_text/content_text` 主正文;标题、caption、tags 只进入 `locator_text`,并保留低置信度 vision fallback。
+- [x] **题目证据校验**:`QuestionEvidence` 保存来源 URL 和原文片段;`prepare_questions()` 会拒绝不存在、过期或无法在正文中定位的证据,再进入去重排序。
 - [ ] **Plan 8:`extract_questions()` 自动抽题**:从 text/OCR/vision 文本中抽取带原文证据的标准 `Question`,生成 `canonical_text` 后接入 `dedupe_and_rank`,减少 agent 临场读 `raw_text` 手工合成题目的比例。
 - [ ] **Plan 9:端到端 runner + CI**:打通 resume -> search -> connectors -> raw_posts -> questions -> prep_package,并加入 GitHub Actions / 端到端 fixtures。
 - [ ] **Plan 10:抖音图文/视频源 MVP**:优先通过 MediaCrawler 接入抖音图文、标题、描述、评论文本;视频 ASR 先做接口与降级提示,确认高密度面经后再接完整转写。
