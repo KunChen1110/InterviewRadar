@@ -25,6 +25,22 @@ def test_question_roundtrips_through_dict():
     assert Question.from_dict(q.to_dict()) == q
 
 
+def test_question_roundtrips_with_canonical_text():
+    q = Question(
+        "招聘渠道应该怎么评估？",
+        ["u1"],
+        canonical_text="评估招聘渠道",
+    )
+
+    assert Question.from_dict(q.to_dict()) == q
+
+
+def test_question_from_legacy_dict_defaults_canonical_text():
+    q = Question.from_dict({"text": "什么是 RAG？", "source_refs": ["u1"]})
+
+    assert q.canonical_text == ""
+
+
 def test_followupchain_roundtrips_through_dict():
     chain = FollowUpChain(
         seed_question="What is MCP?",

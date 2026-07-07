@@ -21,8 +21,8 @@ description: 面试准备 / interview prep。当用户上传简历(PDF/图片)�
 - `scripts/ocr/extract.py` → `extract_text_from_image(path, engine=None, min_confidence=0.6) -> OcrResult{text, confidence, needs_vision}`
 - `scripts/ocr/xhs_images.py` → 下载小红书 `image_list`,默认探测 RapidOCR,把分页 OCR 合并进 `RawPost.content_text/raw_text`;低质量时设 `needs_vision_fallback=True`
 - `scripts/corpus/store.py` → `save_raw_posts / load_raw_posts / save_questions / load_questions`
-- `scripts/corpus/recency.py` → `filter_recent(posts, window_days=730, today=None) -> list[RawPost]`
-- `scripts/corpus/dedupe_rank.py` → `dedupe_and_rank(questions) -> list[Question]`
+- `scripts/corpus/recency.py` → `classify_recency(...)` + `filter_recent(posts, window_days=730, today=None, keep_undated=True) -> list[RawPost]`
+- `scripts/corpus/dedupe_rank.py` → `dedupe_and_rank(questions) -> list[Question]`(先按独立来源数,再按出现次数和时效排序;`question_rank_score()` 可查看评分明细)
 - 数据模型在 `scripts/models.py`;结构说明见 `assets/schema.md`。
 
 ## 工作流
@@ -55,11 +55,11 @@ description: 面试准备 / interview prep。当用户上传简历(PDF/图片)�
 
 4. **内容级相关性判定。** 通过**读帖子内容**对照用户岗位 + 简历来判断每条是否相关——**不是**靠帖子的岗位名是否匹配某张预设表。
 
-5. **题目抽取。** 文本类 RawPost 直接读。**图片类 RawPost(小红书,`post_type="image"`)**:正式包默认用 deep 模式读 `content_text/raw_text`,它优先来自图片 OCR;标题、caption、tags 只在 `locator_text` 里做召回/定位。若 `needs_vision_fallback=True`,用你自己的视觉能力按 `asset_paths` 顺序补读图片。若本次为了速度用了 fast 模式(`enable_image_ocr=False`),只能把标题/正文/标签作为线索,不得声称覆盖了图片里的完整面经题。把读到的题目转成标准化的 `Question`,图片来源的设 `modality_origin="ocr"` 或 `"vision"`。用 `save_questions` 落盘。
+5. **题目抽取。** 文本类 RawPost 直接读。**图片类 RawPost(小红书,`post_type="image"`)**:正式包默认用 deep 模式读 `content_text/raw_text`,它优先来自图片 OCR;标题、caption、tags 只在 `locator_text` 里做召回/定位。若 `needs_vision_fallback=True`,用你自己的视觉能力按 `asset_paths` 顺序补读图片。若本次为了速度用了 fast 模式(`enable_image_ocr=False`),只能把标题/正文/标签作为线索,不得声称覆盖了图片里的完整面经题。把读到的题目转成标准化的 `Question`,图片来源的设 `modality_origin="ocr"` 或 `"vision"`。每个 Question 还要填写 `canonical_text`:用一句尽量短的中文概括问题意图,去掉“请介绍/如何看待/面试官问”等话术,但必须保留技术实体、业务对象和关键条件。例如“如何评估招聘渠道”和“招聘渠道应该怎么评估”都写成“评估招聘渠道”;“Redis 缓存穿透”和“Redis 缓存雪崩”不能合并。用 `save_questions` 落盘。
 
-5b. **时效过滤。** 在抽取出题目之前,先用 `filter_recent(raw_posts)` 把超过约两年的帖子丢掉(默认窗口 730 天;`posted_at` 为 None 的无日期帖子保留)。时效性是硬需求——过时的面经没有价值。
+5b. **时效过滤。** 在抽取出题目之前,先用 `filter_recent(raw_posts)` 处理时效(默认窗口 730 天)。有明确合法日期的帖子执行 730 天硬截断;`posted_at=None` 的无日期内容仅作为补充源保留并在排序中降权;格式错误和异常未来日期直接丢弃。报告必须分别统计近期、无日期和被丢弃数量,不能把无日期内容描述成“近两年面经”。
 
-6. **去重 & 排序。** 跑 `dedupe_and_rank(load_questions(...))` 并保存排序结果。排序同时考虑**频次和时效**(近期题加权更高),这就是高频题集。
+6. **去重 & 排序。** 跑 `dedupe_and_rank(load_questions(...))` 并保存排序结果。去重优先使用 `canonical_text`,排序优先考虑**独立来源 URL 数和时效**,出现次数只用于同分时破平。同一 URL 重复出现不能冒充多来源高频。只有至少 2 个独立来源支持的问题才称为“高频”;其余可作为“相关题”保留,但必须明确是单来源。
 
 7. **项目锚定推理。** 对每道高频题,检查它能否挂到简历里的某个项目/技能上。能挂上就构造 `FollowUpChain`(种子题 → 个性化追问,`is_grounded=true`)。每个追问都**必须**能追溯到(简历某项目/技能)+(某条真实爬到的题);追溯不上就设 `is_grounded=false`,当普通八股题保留。**不要凭空编追问。**
 
@@ -212,7 +212,7 @@ description: 面试准备 / interview prep。当用户上传简历(PDF/图片)�
 模板约束:
 - 全文中文,但技术名词可保留英文。
 - 第 4 节的题目必须来自 `Question` 或明确可追溯的 `RawPost.content_text/raw_text`;小红书 caption/tag 只作为 `locator_text` 辅助,不能单独生成题目。
-- 高频题优先按 `dedupe_and_rank` 结果排序;人工调整时只能因岗位相关性或简历匹配度调整,并说明依据。
+- 高频题优先按 `dedupe_and_rank` 结果排序;人工调整时只能因岗位相关性或简历匹配度调整,并说明依据。称为“高频”的题必须至少有 2 个独立来源 URL;不足时改写为“相关题 Top N”。
 - 来源 URL 必须真实存在于 `source_refs` 或 RawPost.url;不要写"综合资料"这类不可追溯来源。
 - 自我介绍和简历表述可以做表达优化,但事实必须来自简历或真实面经。
 - 第 10 节必须按用户目标岗位动态生成,不要写死为 AI 产品题;AI 产品只是示例。
@@ -221,7 +221,7 @@ description: 面试准备 / interview prep。当用户上传简历(PDF/图片)�
 - **所有面向用户的产出一律用中文**(备考包、题目、追问、分析)——面经源是中文。
 - 当前源:牛客 + 小红书(主力,带时间戳)+ GitHub(补充)。
 - 小红书走 MediaCrawler 采集导出(用户预先离线跑一次,流程见 `docs/setup/mediacrawler.md`),OCR 采用混合策略(粗 OCR + 视觉回退);MediaCrawler 仅供个人、非商业用途。
-- 时效性是硬需求:只保留近两年的面经,排序向近期加权。
+- 时效性是硬需求:有明确日期的来源只保留近两年;无日期补充源必须单独披露并按最低权重排序。
 - 后续版本用到的第三方爬虫(如 MediaCrawler)仅供个人、非商业用途。
 - **可追溯优先于流畅度**:绝不编造无法追溯到真实数据的题目或追问。
 - 若 connector 返回 `degraded` 且消息含 `selector`,说明源站点 HTML 改了选择器;到对应 `scripts/connectors/<name>.py` 顶部注释看当前假设,核对真实 HTML 后更新选择器并补 fixture。

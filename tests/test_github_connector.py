@@ -35,7 +35,8 @@ def test_connector_search_uses_injected_fetcher():
     )
     result = conn.search(["agent"])
     assert result.status == "ok"
-    assert any("RAG" in p.raw_text for p in result.posts)
+    assert any("agent" in p.raw_text.lower() for p in result.posts)
+    assert all("RAG" not in p.raw_text for p in result.posts)
 
 
 def test_connector_degrades_on_fetch_error():
@@ -46,6 +47,63 @@ def test_connector_degrades_on_fetch_error():
     result = conn.search(["agent"])
     assert result.status == "degraded"
     assert result.posts == []
+
+
+def test_connector_keeps_successful_posts_when_later_fetch_fails():
+    def fetch(url):
+        if url.endswith("/broken"):
+            raise RuntimeError("network down")
+        return SAMPLE_MD
+
+    conn = GithubConnector(
+        repo_raw_urls=["https://example.com/good", "https://example.com/broken"],
+        fetcher=fetch,
+        relevance_hints=["RAG"],
+    )
+
+    result = conn.search([])
+
+    assert result.status == "degraded"
+    assert [post.raw_text for post in result.posts] == ["什么是 RAG？"]
+    assert "1/2" in result.message
+
+
+def test_connector_uses_queries_when_explicit_hints_are_missing():
+    conn = GithubConnector(
+        repo_raw_urls=["https://example.com/repo"],
+        fetcher=lambda url: SAMPLE_MD,
+    )
+
+    result = conn.search(["MCP"])
+
+    assert result.status == "ok"
+    assert [post.raw_text for post in result.posts] == ["说明 MCP 和 Skill 的区别"]
+
+
+def test_connector_degrades_when_no_effective_relevance_hints():
+    conn = GithubConnector(
+        repo_raw_urls=["https://example.com/repo"],
+        fetcher=lambda url: SAMPLE_MD,
+    )
+
+    result = conn.search([])
+
+    assert result.status == "degraded"
+    assert result.posts == []
+    assert "relevance" in result.message.lower()
+
+
+def test_connector_falls_back_to_queries_when_explicit_hints_are_blank():
+    conn = GithubConnector(
+        repo_raw_urls=["https://example.com/repo"],
+        fetcher=lambda url: SAMPLE_MD,
+        relevance_hints=["", "  "],
+    )
+
+    result = conn.search(["RAG"])
+
+    assert result.status == "ok"
+    assert [post.raw_text for post in result.posts] == ["什么是 RAG？"]
 
 
 def test_extract_with_hints_keeps_only_matching():

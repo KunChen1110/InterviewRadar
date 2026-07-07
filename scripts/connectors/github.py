@@ -63,16 +63,39 @@ class GithubConnector(Connector):
         self.relevance_hints = relevance_hints
 
     def search(self, queries: list[str]) -> SearchResult:
+        explicit_hints = [
+            hint.strip() for hint in (self.relevance_hints or []) if hint and hint.strip()
+        ]
+        query_hints = [query.strip() for query in queries if query and query.strip()]
+        hints = explicit_hints or query_hints
+        if not hints:
+            return SearchResult.degraded(
+                self.name,
+                "relevance hints are required; pass relevance_hints or non-empty queries",
+            )
+
         posts: list[RawPost] = []
-        try:
-            for url in self.repo_raw_urls:
+        failures: list[tuple[str, Exception]] = []
+        for url in self.repo_raw_urls:
+            try:
                 posts.extend(
                     extract_posts_from_markdown(
                         self.fetcher(url),
                         url,
-                        relevance_hints=self.relevance_hints,
+                        relevance_hints=hints,
                     )
                 )
-        except Exception as exc:  # noqa: BLE001 - degrade, never crash the pipeline
-            return SearchResult.degraded(self.name, f"fetch failed: {exc}")
+            except Exception as exc:  # noqa: BLE001 - isolate failures per URL
+                failures.append((url, exc))
+
+        if failures:
+            first_error = failures[0][1]
+            return SearchResult(
+                posts=posts,
+                status="degraded",
+                message=(
+                    f"[{self.name}] {len(failures)}/{len(self.repo_raw_urls)} fetch failed:"
+                    f" {first_error}; kept {len(posts)} questions from successful URLs"
+                ),
+            )
         return SearchResult(posts=posts, status="ok", message=f"{len(posts)} posts")

@@ -50,6 +50,7 @@ class Question:
     role_tags: list[str] = field(default_factory=list)
     topic: str = ""
     modality_origin: str = "text"  # text | ocr | vision
+    canonical_text: str = ""  # short semantic intent used for cross-wording dedupe
 
     def to_dict(self) -> dict:
         return asdict(self)

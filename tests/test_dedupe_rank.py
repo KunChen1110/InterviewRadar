@@ -1,7 +1,7 @@
 from datetime import date
 
 from scripts.models import Question
-from scripts.corpus.dedupe_rank import normalize, dedupe_and_rank
+from scripts.corpus.dedupe_rank import dedupe_and_rank, normalize, question_rank_score
 
 
 def test_normalize_strips_case_punctuation_whitespace():
@@ -75,3 +75,103 @@ def test_malformed_date_treated_as_undated():
     ]
     out = dedupe_and_rank(qs, today=date(2026, 5, 28))
     assert [q.text for q in out] == ["stale", "garbled"]
+
+
+def test_canonical_text_merges_paraphrased_questions():
+    qs = [
+        Question(
+            "如何评估招聘渠道？",
+            ["u1"],
+            canonical_text="评估招聘渠道",
+        ),
+        Question(
+            "招聘渠道应该怎么评估？",
+            ["u2"],
+            canonical_text="评估招聘渠道",
+        ),
+    ]
+
+    out = dedupe_and_rank(qs, today=date(2026, 5, 28))
+
+    assert len(out) == 1
+    assert out[0].freq == 2
+    assert out[0].source_refs == ["u1", "u2"]
+    assert out[0].canonical_text == "评估招聘渠道"
+
+
+def test_independent_sources_outrank_repeats_from_one_source():
+    qs = [
+        *[
+            Question("单一来源重复题", ["same-url"], latest_posted_at="2026-05-01")
+            for _ in range(5)
+        ],
+        Question("跨来源题", ["u1"], latest_posted_at="2026-05-01"),
+        Question("跨来源题", ["u2"], latest_posted_at="2026-05-01"),
+    ]
+
+    out = dedupe_and_rank(qs, today=date(2026, 5, 28))
+
+    assert out[0].text == "跨来源题"
+    assert out[0].freq == 2
+    assert out[1].freq == 5
+
+
+def test_rank_score_exposes_source_breadth_occurrences_and_recency():
+    q = Question(
+        "What is MCP?",
+        ["u1", "u2", "u2"],
+        freq=3,
+        latest_posted_at="2026-05-01",
+    )
+
+    score = question_rank_score(q, today=date(2026, 5, 28))
+
+    assert score.source_count == 2
+    assert score.occurrence_count == 3
+    assert score.recency_weight == 1.0
+    assert score.total == 2.0
+
+
+def test_rank_score_treats_tracking_variants_as_one_source():
+    q = Question(
+        "如何评估招聘渠道？",
+        [
+            "https://www.xiaohongshu.com/explore/n1?xsec_token=first#comments",
+            "https://www.xiaohongshu.com/explore/n1?xsec_token=second",
+        ],
+        freq=2,
+        latest_posted_at="2026-05-01",
+    )
+
+    score = question_rank_score(q, today=date(2026, 5, 28))
+
+    assert score.source_count == 1
+    assert score.total == 1.0
+
+
+def test_rank_score_preserves_query_parameters_that_identify_content():
+    q = Question(
+        "如何评估招聘渠道？",
+        [
+            "https://example.com/article?id=1&utm_source=feed",
+            "https://example.com/article?id=2&utm_source=feed",
+        ],
+        freq=2,
+        latest_posted_at="2026-05-01",
+    )
+
+    score = question_rank_score(q, today=date(2026, 5, 28))
+
+    assert score.source_count == 2
+    assert score.total == 2.0
+
+
+def test_merge_ignores_malformed_date_when_valid_date_exists():
+    qs = [
+        Question("What is MCP?", ["u1"], latest_posted_at="not-a-date"),
+        Question("what is mcp", ["u2"], latest_posted_at="2026-05-01"),
+    ]
+
+    out = dedupe_and_rank(qs, today=date(2026, 5, 28))
+
+    assert out[0].latest_posted_at == "2026-05-01"

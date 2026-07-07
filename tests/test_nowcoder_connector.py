@@ -39,6 +39,25 @@ def test_connector_degrades_on_fetch_error():
     assert "cookie" in result.message.lower()
 
 
+def test_connector_keeps_successful_posts_when_later_fetch_fails():
+    def fetch(url):
+        if url.endswith("/2"):
+            raise RuntimeError("login wall")
+        return SAMPLE_HTML
+
+    conn = NowCoderConnector(
+        post_urls=["https://nowcoder.com/p/1", "https://nowcoder.com/p/2"],
+        fetcher=fetch,
+    )
+
+    result = conn.search(["agent"])
+
+    assert result.status == "degraded"
+    assert len(result.posts) == 1
+    assert result.posts[0].url.endswith("/1")
+    assert "1/2" in result.message
+
+
 def test_parse_missing_date_yields_none():
     html = (
         "<div class='content-post-title'><h1>T</h1></div>"
@@ -86,8 +105,8 @@ def test_connector_degrades_when_majority_bodies_empty_keeps_good_posts():
     assert "真实正文" in result.posts[0].raw_text
 
 
-def test_connector_ok_when_minority_bodies_empty():
-    # 1 empty out of 4 (25%) — under the 50% threshold, treat as ok and keep all posts
+def test_connector_degrades_and_drops_empty_posts_even_when_minority():
+    # Empty posts are not useful downstream, even when most URLs parsed correctly.
     good_html = (
         "<div class='content-post-title'><h1>T</h1></div>"
         "<div class='nc-slate-editor-content'><p>body</p></div>"
@@ -103,8 +122,10 @@ def test_connector_ok_when_minority_bodies_empty():
         fetcher=fetch,
     )
     result = conn.search([])
-    assert result.status == "ok"
-    assert len(result.posts) == 4
+    assert result.status == "degraded"
+    assert len(result.posts) == 3
+    assert all(post.raw_text for post in result.posts)
+    assert "1/4" in result.message
 
 
 def test_parse_handles_only_title_or_only_content():

@@ -1,9 +1,27 @@
 import re
+from dataclasses import dataclass
 from datetime import date, datetime
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from scripts.models import Question
 
 _PUNCT = re.compile(r"[^\w一-鿿]+")
+_TRACKING_QUERY_KEYS = {
+    "from",
+    "ref",
+    "source",
+    "spm",
+    "xsec_source",
+    "xsec_token",
+}
+
+
+@dataclass(frozen=True)
+class QuestionRankScore:
+    source_count: int
+    occurrence_count: int
+    recency_weight: float
+    total: float
 
 
 def normalize(text: str) -> str:
@@ -19,9 +37,15 @@ def _union(into: list[str], extra: list[str]) -> None:
 
 
 def _max_date(a: str | None, b: str | None) -> str | None:
-    # Returns the more recent ISO date string; any real date beats None.
-    candidates = [d for d in (a, b) if d]
-    return max(candidates) if candidates else None
+    candidates: list[tuple[date, str]] = []
+    for value in (a, b):
+        if not value:
+            continue
+        try:
+            candidates.append((datetime.strptime(value, "%Y-%m-%d").date(), value))
+        except ValueError:
+            continue
+    return max(candidates)[1] if candidates else None
 
 
 def _recency_weight(posted_at: str | None, today: date) -> float:
@@ -32,6 +56,8 @@ def _recency_weight(posted_at: str | None, today: date) -> float:
     except ValueError:
         return 0.2
     days = (today - d).days
+    if days < -1:
+        return 0.2
     if days <= 365:
         return 1.0
     if days <= 730:
@@ -39,18 +65,55 @@ def _recency_weight(posted_at: str | None, today: date) -> float:
     return 0.3
 
 
+def normalize_source_ref(source_ref: str) -> str:
+    value = source_ref.strip()
+    parsed = urlsplit(value)
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+        return value
+    path = parsed.path.rstrip("/") or "/"
+    content_query = sorted(
+        (key, value)
+        for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+        if key.lower() not in _TRACKING_QUERY_KEYS and not key.lower().startswith("utm_")
+    )
+    return urlunsplit(
+        (
+            parsed.scheme.lower(),
+            parsed.netloc.lower(),
+            path,
+            urlencode(content_query),
+            "",
+        )
+    )
+
+
+def question_rank_score(q: Question, today: date | None = None) -> QuestionRankScore:
+    ref = today or date.today()
+    source_count = len(
+        {normalize_source_ref(source) for source in q.source_refs if source and source.strip()}
+    )
+    recency_weight = _recency_weight(q.latest_posted_at, ref)
+    return QuestionRankScore(
+        source_count=source_count,
+        occurrence_count=q.freq,
+        recency_weight=recency_weight,
+        total=source_count * recency_weight,
+    )
+
+
 def dedupe_and_rank(questions: list[Question], today: date | None = None) -> list[Question]:
-    """Merge questions with the same normalized text and rank by frequency and recency.
+    """Merge questions by canonical intent and rank by source breadth and recency.
 
     Contract: callers pass one Question per occurrence with freq=1; this sums
-    incoming freq, so passing pre-aggregated freqs will skew ranking. Score is
-    freq * recency_weight(latest_posted_at); ties keep first-seen order.
+    incoming freq, so passing pre-aggregated freqs will skew the occurrence
+    tie-breaker. Independent source URLs determine the primary frequency score;
+    occurrence count only breaks ties. Final ties keep first-seen order.
     """
     ref = today or date.today()
     merged: dict[str, Question] = {}
     order: list[str] = []
     for q in questions:
-        key = normalize(q.text)
+        key = normalize(q.canonical_text or q.text)
         if key not in merged:
             merged[key] = Question(
                 text=q.text,
@@ -60,6 +123,7 @@ def dedupe_and_rank(questions: list[Question], today: date | None = None) -> lis
                 role_tags=list(q.role_tags),
                 topic=q.topic,
                 modality_origin=q.modality_origin,
+                canonical_text=q.canonical_text,
             )
             order.append(key)
         else:
@@ -68,10 +132,13 @@ def dedupe_and_rank(questions: list[Question], today: date | None = None) -> lis
             m.latest_posted_at = _max_date(m.latest_posted_at, q.latest_posted_at)
             _union(m.source_refs, q.source_refs)
             _union(m.role_tags, q.role_tags)
+            if not m.canonical_text and q.canonical_text:
+                m.canonical_text = q.canonical_text
 
-    def score(k: str) -> float:
+    def score(k: str) -> tuple[float, int]:
         q = merged[k]
-        return q.freq * _recency_weight(q.latest_posted_at, ref)
+        breakdown = question_rank_score(q, today=ref)
+        return breakdown.total, breakdown.occurrence_count
 
-    ranked = sorted(order, key=lambda k: -score(k))
+    ranked = sorted(order, key=lambda k: tuple(-part for part in score(k)))
     return [merged[k] for k in ranked]
