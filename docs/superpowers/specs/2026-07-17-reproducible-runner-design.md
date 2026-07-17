@@ -66,12 +66,12 @@ date is used solely as the existing recency policy's reference date.
 
 The runner performs these operations in this exact order:
 
-1. Read the two input files with the existing store loaders and calculate the
-   SHA-256 of their source bytes.
+1. Read each input file once into an immutable byte snapshot, calculate its
+   SHA-256 from that snapshot, and deserialize the same bytes.
 2. Extract immutable evidence candidates with `extract_candidates(raw_posts)`.
 3. Materialize source-derived questions with
    `materialize_questions(candidates, decisions)`.
-4. Apply `prepare_questions(materialized_questions, today=today)`.
+4. Apply `prepare_questions(raw_posts, materialized_questions, today=today)`.
 5. Write a fresh run directory containing canonical copies of inputs,
    extraction artifacts, quality output, and a manifest.
 
@@ -82,9 +82,10 @@ reimplement its rules.
 ## Run Package
 
 The selected output directory must not exist. This avoids mixing a new run with
-stale files and prevents destructive overwrites. The runner writes to a sibling
-temporary directory, then renames it into place only after every artifact has
-been generated; a failing run therefore leaves no partial final run directory.
+stale files and prevents destructive overwrites. The runner reserves it with an
+atomic directory creation before processing, so concurrent runs cannot both
+claim the same destination. It removes the directory it reserved when
+processing fails; a run becomes consumable only once `manifest.json` exists.
 
 Each successful run contains:
 
@@ -100,9 +101,10 @@ Each successful run contains:
 | `manifest.json` | Schema, source-input hashes, artifact hashes, and count summary. |
 
 The manifest excludes a hash of itself to avoid a circular identity. It includes
-SHA-256 hashes of all preceding artifacts and the source-byte hashes of both
-provided input paths. It includes neither absolute paths nor wall-clock
-timestamps. Its schema version starts at `1`.
+SHA-256 hashes of all preceding artifacts, the source-byte hashes of both
+provided input paths, and the effective ISO `today` value used by recency
+filtering. It includes neither absolute paths nor wall-clock timestamps. Its
+schema version starts at `1`.
 
 All JSON is written with the repository's existing canonical serializers and a
 stable filename order. With byte-identical source inputs and the same explicit
@@ -115,10 +117,11 @@ byte-identical.
   validation error and produces no final directory.
 - An existing output path is rejected before any work begins, including an
   empty directory, so a retry must use a new run identifier.
-- Invalid decisions remain represented by the existing materialization issues;
-  they cannot become questions.
+- Invalid decisions and candidates without any decision remain represented by
+  materialization issues; neither can become questions silently.
 - Invalid `--today` is reported by argparse as a command-line error.
-- Temporary output is removed on any write or processing failure.
+- The runner removes its reserved output directory on any write or processing
+  failure.
 
 ## Documentation and CI
 
@@ -136,9 +139,10 @@ or live corpus data are added.
 ## Verification
 
 Tests must cover a successful run, artifact and manifest hash correctness,
-byte-stable replay with a fixed date, stale-question diagnostics, refusal to
-overwrite an existing destination, and CLI date parsing. The existing full test
-suite and compile check must pass on the supported interpreter baseline.
+byte-stable replay with a fixed date, stale-question diagnostics, byte-snapshot
+integrity, atomic destination reservation, missing-decision diagnostics, refusal
+to overwrite an existing destination, and CLI date parsing. The existing full
+test suite and compile check must pass on the supported interpreter baseline.
 
 ## Scope Boundary
 
@@ -147,4 +151,3 @@ to ranked interview questions. Search query generation, connectors, browser
 collection, reviewer decision generation, resume tailoring, and final answer
 writing remain separate agents or operator steps. Their outputs are explicit
 inputs or downstream consumers, not hidden runner behavior.
-

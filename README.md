@@ -275,7 +275,7 @@ InterviewRadar/
 - [x] **Plan 7:小红书图片面经补全**:`image_list` 会按顺序下载到 `corpus_cache/assets/xhs/{note_id}/`,优先用图片 OCR 作为 `RawPost.raw_text/content_text` 主正文;标题、caption、tags 只进入 `locator_text`,并保留低置信度 vision fallback。
 - [x] **题目证据校验**:`QuestionEvidence` 保存来源 URL 和原文片段;`prepare_questions()` 会拒绝不存在、过期或无法在正文中定位的证据,再进入去重排序。
 - [x] **Plan 8:证据优先自动抽题**:`extract_candidates()` 先生成不可变原文候选,agent 只提交是否保留、语义归一和岗位标签;`materialize_questions()` 从候选构造题面和 evidence,再进入 `prepare_questions()`。每轮候选与决策都会落盘,方便核查和复跑。
-- [ ] **Plan 9:端到端 runner + CI**:打通 resume -> search -> connectors -> raw_posts -> questions -> prep_package,并加入 GitHub Actions / 端到端 fixtures。
+- [x] **Plan 9:可复放语料 runner + CI**:输入已归一化的 `raw_posts.json` 和显式 `extraction_decisions.json`,一次生成带 SHA-256 manifest 的独立运行包（候选、落题、排序题、拒绝项和诊断）。它不隐藏浏览器采集、Agent 判断或最终备考文案，正式包只消费 `ranked_questions.json`。
 - [ ] **Plan 10:抖音图文/视频源 MVP**:优先通过 MediaCrawler 接入抖音图文、标题、描述、评论文本;视频 ASR 先做接口与降级提示,确认高密度面经后再接完整转写。
 - [ ] **持久化术语词典**:跨 session 累积岗位名、公司名、技术词和真实高频术语,用于下一轮查询扩展。
 - [ ] **评测体系**:Golden Set + Trace 回放,覆盖 OCR 抽题、自动抽题、排序和备考包生成质量。

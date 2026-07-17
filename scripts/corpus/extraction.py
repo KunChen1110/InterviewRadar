@@ -224,4 +224,8 @@ def materialize_questions(
             )
         )
 
+    for candidate_id in candidate_map:
+        if candidate_id not in seen_ids:
+            issues.append(ExtractionIssue("missing_decision", candidate_id))
+
     return ExtractionMaterializationResult(questions, rejected, issues)

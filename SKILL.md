@@ -22,6 +22,7 @@ description: 面试准备 / interview prep。当用户上传简历(PDF/图片)�
 - `scripts/ocr/xhs_images.py` → 下载小红书 `image_list`,默认探测 RapidOCR,把分页 OCR 合并进 `RawPost.content_text/raw_text`;低质量时设 `needs_vision_fallback=True`
 - `scripts/corpus/extraction.py` → `extract_candidates(raw_posts) -> list[ExtractionCandidate]` + `materialize_questions(candidates, decisions) -> ExtractionMaterializationResult`(候选原文切分 + 受约束决策落题)
 - `scripts/corpus/store.py` → `save_raw_posts / load_raw_posts / save_questions / load_questions / save_extraction_candidates / load_extraction_candidates / save_extraction_decisions / load_extraction_decisions`
+- `scripts/corpus/runner.py` → `run_pipeline(raw_posts_path, decisions_path, output_dir, today=None) -> PipelineRunResult`(离线、可复放地生成输入副本、候选、落题、排序题、拒绝项、诊断和 SHA-256 manifest)
 - `scripts/corpus/recency.py` → `classify_recency(...)` + `filter_recent(posts, window_days=730, today=None, keep_undated=True) -> list[RawPost]`
 - `scripts/corpus/dedupe_rank.py` → `dedupe_and_rank(questions) -> list[Question]`(先按独立来源数,再按出现次数和时效排序;`question_rank_score()` 可查看评分明细)
 - `scripts/corpus/quality.py` → `prepare_questions(raw_posts, questions, ...) -> QuestionPreparationResult`(证据校验、时效过滤、去重排序的统一入口;新运行默认拒绝无证据题目)
@@ -63,11 +64,21 @@ description: 面试准备 / interview prep。当用户上传简历(PDF/图片)�
    - `accepted=true` 只用于真实、相关且语义明确的面试问题;`canonical_text` 用一句尽量短的中文概括问题意图,去掉“请介绍/如何看待/面试官问”等话术,但必须保留技术实体、业务对象和关键条件。例如“如何评估招聘渠道”和“招聘渠道应该怎么评估”都写成“评估招聘渠道”;“Redis 缓存穿透”和“Redis 缓存雪崩”不能合并。
    - 不要提供题面、URL、日期或原文证据。它们由 Python 从候选固定生成;拒绝的候选也必须写 `accepted=false`,不得静默跳过。
 
-5a. **题目落盘。** 调用 `materialize_questions(candidates, decisions)`。只将其 `questions` 用 `save_questions` 写入 `corpus_cache/questions.json`;`rejected_decisions` 和 `issues` 必须进入备考包的“数据缺口”。最终题面来自候选的 `display_text`,原文证据来自候选的 `excerpt`,不得手工替换。
+5a. **生成可复放运行包。** 决策写完后，执行：
 
-5b. **证据与时效校验。** 题目抽取后调用 `prepare_questions(raw_posts, questions)`。它会对明确合法日期执行 730 天硬截断,把 `posted_at=None` 的无日期内容作为降权补充源,丢弃格式错误/异常未来日期,并验证每条 evidence 的 URL 和 excerpt。只使用 `result.ranked_questions` 继续生成报告;`result.rejected_questions`、`result.issues` 和 `result.recency_counts` 必须写入“数据缺口”,不得静默忽略。旧缓存迁移才允许 `require_evidence=False`,且这些题只能标为“未验证相关题”,不能标成 grounded 或高频。
+   ```bash
+   python -m scripts.corpus.runner \
+     --raw-posts corpus_cache/raw_posts.json \
+     --decisions corpus_cache/extraction_decisions.json \
+     --output corpus_cache/runs/<本次标识> \
+     --today YYYY-MM-DD
+   ```
 
-6. **去重 & 排序。** `prepare_questions()` 已完成按 `canonical_text` 去重和排序。排序优先考虑**独立来源 URL 数和时效**,出现次数只用于同分时破平。同一 URL 重复出现不能冒充多来源高频。只有至少 2 个经过 evidence 校验的独立来源支持的问题才称为“高频”;其余可作为“相关题”保留,但必须明确是单来源。
+   `--output` 必须是一个**尚不存在**的目录。runner 会重新从 `raw_posts` 生成候选，再完成 `materialize_questions()`、`prepare_questions()` 和去重排序；它把输入副本、中间产物、排序题、拒绝项、诊断和 SHA-256 manifest 一起写入该目录。manifest 还会记录实际用于时效判断的 `today`;正式复跑应显式传入同一日期。最终题面仍来自候选的 `display_text`,原文证据来自候选的 `excerpt`,不得手工替换。
+
+5b. **读取数据缺口。** 先检查 `<输出目录>/diagnostics.json`:其中包含 decision 处理结果（包括明确不保留或漏决策的候选）、候选/证据问题、过期来源计数和被拒绝项。它不执行搜索、爬虫、简历阅读、语义 decision 或最终备考文案；这些仍是前后显式步骤。正式备考包只允许读取 `<输出目录>/ranked_questions.json`;不得回退到 `materialized_questions.json`、旧缓存或人工拼接题目。
+
+6. **去重 & 排序。** runner 内部的 `prepare_questions()` 已完成证据与时效校验、按 `canonical_text` 去重和排序。排序优先考虑**独立来源 URL 数和时效**,出现次数只用于同分时破平。同一 URL 重复出现不能冒充多来源高频。只有至少 2 个经过 evidence 校验的独立来源支持的问题才称为“高频”;其余可作为“相关题”保留,但必须明确是单来源。
 
 7. **项目锚定推理。** 对每道高频题,检查它能否挂到简历里的某个项目/技能上。能挂上就构造 `FollowUpChain`(种子题 → 个性化追问,`is_grounded=true`)。每个追问都**必须**能追溯到(简历某项目/技能)+(某条真实爬到的题);追溯不上就设 `is_grounded=false`,当普通八股题保留。**不要凭空编追问。**
 
@@ -220,8 +231,8 @@ description: 面试准备 / interview prep。当用户上传简历(PDF/图片)�
 
 模板约束:
 - 全文中文,但技术名词可保留英文。
-- 第 4 节的题目必须来自 `Question` 或明确可追溯的 `RawPost.content_text/raw_text`;小红书 caption/tag 只作为 `locator_text` 辅助,不能单独生成题目。
-- 第 4 节只允许使用 `prepare_questions().ranked_questions`;每个来源都必须展示已校验的 `QuestionEvidence.excerpt`。只有 URL、没有原文片段的题不能进入高频区。
+- 第 4 节的题目只能来自本次运行包的 `<输出目录>/ranked_questions.json`;它的每条 `QuestionEvidence.excerpt` 必须可追溯到本次运行包中的 `raw_posts.json`。小红书 caption/tag 只作为 `locator_text` 辅助,不能单独生成题目。
+- 不得直接向模板输入任意 `Question`、`RawPost.content_text/raw_text` 或手工调用 `prepare_questions()` 的结果来绕过运行包。只有 URL、没有原文片段的题不能进入高频区。
 - 高频题优先按 `dedupe_and_rank` 结果排序;人工调整时只能因岗位相关性或简历匹配度调整,并说明依据。称为“高频”的题必须至少有 2 个独立来源 URL;不足时改写为“相关题 Top N”。
 - 来源 URL 必须真实存在于 `source_refs` 或 RawPost.url;不要写"综合资料"这类不可追溯来源。
 - 自我介绍和简历表述可以做表达优化,但事实必须来自简历或真实面经。
