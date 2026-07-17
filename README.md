@@ -236,10 +236,11 @@ InterviewRadar/
 │   │   ├── xiaohongshu.py         ├─ 小红书 (吃 MediaCrawler 导出)
 │   │   └── github.py              └─ GitHub (relevance_hints 过滤算法噪音)
 │   ├── corpus/
-│   │   ├── store.py             RawPost / Question 存取
+│   │   ├── store.py             RawPost / Question / 抽题审计产物存取
 │   │   ├── recency.py           时效过滤(730d)
 │   │   ├── dedupe_rank.py       规范问题去重 + 独立来源数×时效排序
-│   │   └── quality.py           原文证据校验 + 过滤排序入口
+│   │   ├── quality.py           原文证据校验 + 过滤排序入口
+│   │   └── extraction.py        原文候选切分 + 受约束语义决策落题
 │   ├── ocr/
 │   │   ├── extract.py           OCR + 视觉回退
 │   │   └── xhs_images.py        小红书图片下载 + OCR 拼接
@@ -273,7 +274,7 @@ InterviewRadar/
 - [x] **小红书基础适配**:MediaCrawler 原生 JSON 已能 normalize 成 `RawPost`,支持标题、正文、时间戳、图片 URL。
 - [x] **Plan 7:小红书图片面经补全**:`image_list` 会按顺序下载到 `corpus_cache/assets/xhs/{note_id}/`,优先用图片 OCR 作为 `RawPost.raw_text/content_text` 主正文;标题、caption、tags 只进入 `locator_text`,并保留低置信度 vision fallback。
 - [x] **题目证据校验**:`QuestionEvidence` 保存来源 URL 和原文片段;`prepare_questions()` 会拒绝不存在、过期或无法在正文中定位的证据,再进入去重排序。
-- [ ] **Plan 8:`extract_questions()` 自动抽题**:从 text/OCR/vision 文本中抽取带原文证据的标准 `Question`,生成 `canonical_text` 后接入 `dedupe_and_rank`,减少 agent 临场读 `raw_text` 手工合成题目的比例。
+- [x] **Plan 8:证据优先自动抽题**:`extract_candidates()` 先生成不可变原文候选,agent 只提交是否保留、语义归一和岗位标签;`materialize_questions()` 从候选构造题面和 evidence,再进入 `prepare_questions()`。每轮候选与决策都会落盘,方便核查和复跑。
 - [ ] **Plan 9:端到端 runner + CI**:打通 resume -> search -> connectors -> raw_posts -> questions -> prep_package,并加入 GitHub Actions / 端到端 fixtures。
 - [ ] **Plan 10:抖音图文/视频源 MVP**:优先通过 MediaCrawler 接入抖音图文、标题、描述、评论文本;视频 ASR 先做接口与降级提示,确认高密度面经后再接完整转写。
 - [ ] **持久化术语词典**:跨 session 累积岗位名、公司名、技术词和真实高频术语,用于下一轮查询扩展。

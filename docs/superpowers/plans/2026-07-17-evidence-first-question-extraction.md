@@ -582,7 +582,7 @@ git commit -m "feat: persist extraction review artifacts"
 - Modify: `SKILL.md`
 - Modify: `README.md`
 
-- [ ] **Step 1: Add a failing end-to-end extraction test**
+- [x] **Step 1: Add an end-to-end extraction test**
 
 Append to `tests/test_question_extraction.py`:
 
@@ -606,13 +606,13 @@ def test_extraction_pipeline_requires_raw_post_evidence_before_ranking():
     assert [question.canonical_text for question in prepared.ranked_questions] == ["评估招聘渠道"]
 ```
 
-- [ ] **Step 2: Run the pipeline test to verify it passes through the existing grounding gate**
+- [x] **Step 2: Run the pipeline test to verify it passes through the existing grounding gate**
 
 Run: `../../.venv/bin/python -m pytest tests/test_question_extraction.py::test_extraction_pipeline_requires_raw_post_evidence_before_ranking -q`
 
 Expected: PASS because Task 2 already creates immutable source refs and evidence.
 
-- [ ] **Step 3: Document the exact workflow after confirming the materialized records**
+- [x] **Step 3: Document the exact workflow after confirming the materialized records**
 
 Task 2 must already set `source_refs`, `latest_posted_at`, and immutable
 `QuestionEvidence`; this integration task does not relax or modify
@@ -651,13 +651,13 @@ replace the Plan 8 roadmap line with:
   evidence,再进入 `prepare_questions()`。每轮候选与决策都会落盘,方便核查和复跑。
 ```
 
-- [ ] **Step 4: Run the focused pipeline tests to verify they pass**
+- [x] **Step 4: Run the focused pipeline tests to verify they pass**
 
 Run: `../../.venv/bin/python -m pytest tests/test_question_extraction.py -q`
 
 Expected: `8 passed`.
 
-- [ ] **Step 5: Commit workflow integration**
+- [x] **Step 5: Commit workflow integration**
 
 ```bash
 git add scripts/corpus/extraction.py tests/test_question_extraction.py SKILL.md README.md

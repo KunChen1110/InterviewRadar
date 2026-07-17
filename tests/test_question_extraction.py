@@ -1,9 +1,12 @@
+from datetime import date
+
 from scripts.corpus.extraction import (
     ExtractionCandidate,
     ExtractionDecision,
     extract_candidates,
     materialize_questions,
 )
+from scripts.corpus.quality import prepare_questions
 from scripts.models import RawPost
 
 
@@ -152,3 +155,19 @@ def test_materialize_rejects_bad_role_tags():
 
     assert result.questions == []
     assert [issue.code for issue in result.issues] == ["invalid_role_tags"]
+
+
+def test_extraction_pipeline_requires_raw_post_evidence_before_ranking():
+    post = _post("面试官主要问：\n1. 如何评估招聘渠道？")
+    candidate = extract_candidates([post])[0]
+    decision = ExtractionDecision(candidate.candidate_id, True, "评估招聘渠道")
+
+    materialized = materialize_questions([candidate], [decision])
+    prepared = prepare_questions([post], materialized.questions, today=date(2026, 7, 7))
+
+    assert materialized.questions[0].text == "如何评估招聘渠道？"
+    assert materialized.questions[0].evidence[0].excerpt == "1. 如何评估招聘渠道？"
+    assert prepared.rejected_questions == []
+    assert [question.canonical_text for question in prepared.ranked_questions] == [
+        "评估招聘渠道"
+    ]

@@ -20,7 +20,8 @@ description: 面试准备 / interview prep。当用户上传简历(PDF/图片)�
 - `scripts/scrape/normalize_xhs.py` → `normalize(notes) -> list[dict]`(CLI:`python -m scripts.scrape.normalize_xhs <in.json> -o <out.json>`),把 MediaCrawler 原生输出归一化为 `XiaohongshuConnector` 的输入。仅手动模式用得到;driver 模式连接器内部自动调用。
 - `scripts/ocr/extract.py` → `extract_text_from_image(path, engine=None, min_confidence=0.6) -> OcrResult{text, confidence, needs_vision}`
 - `scripts/ocr/xhs_images.py` → 下载小红书 `image_list`,默认探测 RapidOCR,把分页 OCR 合并进 `RawPost.content_text/raw_text`;低质量时设 `needs_vision_fallback=True`
-- `scripts/corpus/store.py` → `save_raw_posts / load_raw_posts / save_questions / load_questions`
+- `scripts/corpus/extraction.py` → `extract_candidates(raw_posts) -> list[ExtractionCandidate]` + `materialize_questions(candidates, decisions) -> ExtractionMaterializationResult`(候选原文切分 + 受约束决策落题)
+- `scripts/corpus/store.py` → `save_raw_posts / load_raw_posts / save_questions / load_questions / save_extraction_candidates / load_extraction_candidates / save_extraction_decisions / load_extraction_decisions`
 - `scripts/corpus/recency.py` → `classify_recency(...)` + `filter_recent(posts, window_days=730, today=None, keep_undated=True) -> list[RawPost]`
 - `scripts/corpus/dedupe_rank.py` → `dedupe_and_rank(questions) -> list[Question]`(先按独立来源数,再按出现次数和时效排序;`question_rank_score()` 可查看评分明细)
 - `scripts/corpus/quality.py` → `prepare_questions(raw_posts, questions, ...) -> QuestionPreparationResult`(证据校验、时效过滤、去重排序的统一入口;新运行默认拒绝无证据题目)
@@ -56,10 +57,13 @@ description: 面试准备 / interview prep。当用户上传简历(PDF/图片)�
 
 4. **内容级相关性判定。** 通过**读帖子内容**对照用户岗位 + 简历来判断每条是否相关——**不是**靠帖子的岗位名是否匹配某张预设表。
 
-5. **题目抽取。** 文本类 RawPost 直接读。**图片类 RawPost(小红书,`post_type="image"`)**:正式包默认用 deep 模式读 `content_text/raw_text`,它优先来自图片 OCR;标题、caption、tags 只在 `locator_text` 里做召回/定位。若 `needs_vision_fallback=True`,用你自己的视觉能力按 `asset_paths` 顺序补读图片。若本次为了速度用了 fast 模式(`enable_image_ocr=False`),只能把标题/正文/标签作为线索,不得声称覆盖了图片里的完整面经题。把读到的题目转成标准化的 `Question`,图片来源的设 `modality_origin="ocr"` 或 `"vision"`。每个 Question 必须填写:
-   - `canonical_text`:用一句尽量短的中文概括问题意图,去掉“请介绍/如何看待/面试官问”等话术,但必须保留技术实体、业务对象和关键条件。例如“如何评估招聘渠道”和“招聘渠道应该怎么评估”都写成“评估招聘渠道”;“Redis 缓存穿透”和“Redis 缓存雪崩”不能合并。
-   - `evidence`:至少一条 `QuestionEvidence(source_url, excerpt, modality_origin)`。`source_url` 必须等于某条 RawPost.url;`excerpt` 必须从该 RawPost 的 `content_text/raw_text` **逐字摘取**,只允许合并空白,不得改写或总结。图片题按实际来源标 `ocr` 或 `vision`。
-   用 `save_questions` 落盘。
+5. **候选抽题与语义决策。** 文本类 RawPost 直接使用 `content_text/raw_text`。**图片类 RawPost(小红书,`post_type="image"`)**:正式包默认用 deep 模式读 `content_text/raw_text`,它优先来自图片 OCR;标题、caption、tags 只在 `locator_text` 里做召回/定位。若 `needs_vision_fallback=True`,先按 `asset_paths` 顺序补读图片,把视觉补读的**逐字原文**写入该帖 `content_text`(保留已有 OCR 文本),再继续抽题。若本次为了速度用了 fast 模式(`enable_image_ocr=False`),只能把标题/正文/标签作为线索,不得声称覆盖了图片里的完整面经题。
+
+   对所有 `RawPost` 调用 `extract_candidates(raw_posts)`,并用 `save_extraction_candidates` 写入 `corpus_cache/extraction_candidates.json`。候选只是原文片段,不是题目。读取候选后,结合目标岗位和简历,**每个候选**写一条 `ExtractionDecision(candidate_id, accepted, canonical_text, topic, role_tags)`并用 `save_extraction_decisions` 写入 `corpus_cache/extraction_decisions.json`:
+   - `accepted=true` 只用于真实、相关且语义明确的面试问题;`canonical_text` 用一句尽量短的中文概括问题意图,去掉“请介绍/如何看待/面试官问”等话术,但必须保留技术实体、业务对象和关键条件。例如“如何评估招聘渠道”和“招聘渠道应该怎么评估”都写成“评估招聘渠道”;“Redis 缓存穿透”和“Redis 缓存雪崩”不能合并。
+   - 不要提供题面、URL、日期或原文证据。它们由 Python 从候选固定生成;拒绝的候选也必须写 `accepted=false`,不得静默跳过。
+
+5a. **题目落盘。** 调用 `materialize_questions(candidates, decisions)`。只将其 `questions` 用 `save_questions` 写入 `corpus_cache/questions.json`;`rejected_decisions` 和 `issues` 必须进入备考包的“数据缺口”。最终题面来自候选的 `display_text`,原文证据来自候选的 `excerpt`,不得手工替换。
 
 5b. **证据与时效校验。** 题目抽取后调用 `prepare_questions(raw_posts, questions)`。它会对明确合法日期执行 730 天硬截断,把 `posted_at=None` 的无日期内容作为降权补充源,丢弃格式错误/异常未来日期,并验证每条 evidence 的 URL 和 excerpt。只使用 `result.ranked_questions` 继续生成报告;`result.rejected_questions`、`result.issues` 和 `result.recency_counts` 必须写入“数据缺口”,不得静默忽略。旧缓存迁移才允许 `require_evidence=False`,且这些题只能标为“未验证相关题”,不能标成 grounded 或高频。
 
