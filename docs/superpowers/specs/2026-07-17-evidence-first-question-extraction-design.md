@@ -30,9 +30,10 @@ The current agent is the semantic executor and Python remains the trust boundary
 Add `scripts/corpus/extraction.py` with four focused responsibilities:
 
 - `ExtractionCandidate`: serializable immutable source span with `candidate_id`,
-  `source_url`, `excerpt`, `posted_at`, and `modality_origin`.
+  `source_url`, `excerpt`, source-derived `display_text`, `posted_at`, and
+  `modality_origin`.
 - `ExtractionDecision`: serializable agent response with `candidate_id`,
-  `accepted`, `text`, `canonical_text`, `topic`, and `role_tags`.
+  `accepted`, `canonical_text`, `topic`, and `role_tags`.
 - `extract_candidates(raw_posts)`: deterministic segmentation of textual
   `content_text` into plausible interview-question spans.
 - `materialize_questions(candidates, decisions)`: fail-closed conversion from
@@ -69,9 +70,11 @@ non-empty lines or list items that show at least one interview-like signal:
 
 The extractor never rewrites source text. It strips only surrounding whitespace,
 limits each candidate to a single source line/list item, and preserves the exact
-remaining excerpt. Lines that are clearly narrative without a question signal are
-not sent to the agent. This bounds review volume without pretending that rules
-can decide semantic relevance.
+remaining excerpt. Its `display_text` only removes a leading list marker or
+interview framing prefix from that excerpt; the original excerpt remains the
+evidence shown to users and validated downstream. Lines that are clearly narrative
+without a question signal are not sent to the agent. This bounds review volume
+without pretending that rules can decide semantic relevance.
 
 The candidate modality is derived from the `RawPost`: text posts yield `text`;
 image posts whose main content is OCR yield `ocr`; content explicitly supplied by
@@ -86,22 +89,22 @@ one structured decision per reviewed candidate. The permitted shape is:
 {
   "candidate_id": "candidate identifier from the input",
   "accepted": true,
-  "text": "A faithful, readable interview question in Chinese",
   "canonical_text": "Short semantic intent used to merge paraphrases",
   "topic": "Optional topical label",
   "role_tags": ["Optional role or skill labels"]
 }
 ```
 
-For `accepted: false`, semantic display fields are ignored. The agent should
+For `accepted: false`, semantic fields are ignored. The agent should
 reject navigation text, unrelated discussion, generic advice, and ambiguous
 fragments. It may use role direction and resume terms to decide relevance and
 assign tags, but neither can alter source URL, date, evidence excerpt, or source
-frequency.
+frequency. It also cannot submit a replacement display question: the final
+`Question.text` is the candidate's deterministic source-derived `display_text`.
 
-An accepted decision requires non-empty `text` and `canonical_text`. One candidate
-can produce at most one question; splitting compound source lines belongs to a
-future extraction improvement after real failure examples exist.
+An accepted decision requires non-empty `canonical_text`. One candidate can
+produce at most one question; splitting compound source lines belongs to a future
+extraction improvement after real failure examples exist.
 
 ## Validation and Failure Behavior
 
@@ -111,13 +114,14 @@ It rejects, without raising, these malformed inputs:
 
 - unknown or duplicate decision candidate IDs;
 - duplicate candidate IDs;
-- accepted decisions missing display text or canonical intent;
+- accepted decisions missing canonical intent;
 - non-string or empty role tags;
 - candidates with blank URL or excerpt.
 
-For every accepted decision, it constructs exactly one `QuestionEvidence` using
-the candidate's immutable URL, excerpt, date, and modality. It does not accept
-agent-provided evidence fields. Then `prepare_questions()` remains responsible
+For every accepted decision, it constructs exactly one `Question` using the
+candidate's source-derived `display_text`, and one `QuestionEvidence` using its
+immutable URL, excerpt, date, and modality. It does not accept agent-provided
+question text or evidence fields. Then `prepare_questions()` remains responsible
 for recency filtering, source lookup, excerpt verification, de-duplication, and
 independent-source ranking. A question rejected by either stage is excluded from
 the report and recorded in diagnostics.
@@ -148,7 +152,8 @@ Add focused fixture-free tests for:
 - successful materialization preserving immutable evidence;
 - unknown ID, duplicate ID, blank mandatory fields, and malformed tags;
 - an end-to-end in-memory flow from `RawPost` to ranked grounded question,
-  including a negative case that proves agent text cannot replace evidence.
+  including a negative case that proves decisions cannot replace source-derived
+  display text or evidence.
 
 Existing `prepare_questions()` and ranking tests remain the regression contract.
 Run the complete test suite, compile all scripts, and check documentation diffs
