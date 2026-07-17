@@ -28,7 +28,7 @@
 - Create: `scripts/corpus/extraction.py`
 - Create: `tests/test_question_extraction.py`
 
-- [ ] **Step 1: Write the failing candidate-extraction tests**
+- [x] **Step 1: Write the failing candidate-extraction tests**
 
 ```python
 from scripts.corpus.extraction import extract_candidates
@@ -99,13 +99,13 @@ def test_extract_candidates_derives_modality_from_raw_post_content():
     ]
 ```
 
-- [ ] **Step 2: Run the candidate tests to verify they fail**
+- [x] **Step 2: Run the candidate tests to verify they fail**
 
 Run: `../../.venv/bin/python -m pytest tests/test_question_extraction.py -q`
 
 Expected: FAIL during collection because `scripts.corpus.extraction` does not exist.
 
-- [ ] **Step 3: Implement candidate schemas and extraction**
+- [x] **Step 3: Implement candidate schemas and extraction**
 
 Create `scripts/corpus/extraction.py` with the following contracts. The hash input
 must use the normalized URL, the original source-line ordinal, and the exact
@@ -210,13 +210,13 @@ def extract_candidates(raw_posts: list[RawPost]) -> list[ExtractionCandidate]:
     return candidates
 ```
 
-- [ ] **Step 4: Run the candidate tests to verify they pass**
+- [x] **Step 4: Run the candidate tests to verify they pass**
 
 Run: `../../.venv/bin/python -m pytest tests/test_question_extraction.py -q`
 
 Expected: `3 passed`.
 
-- [ ] **Step 5: Commit the extraction foundation**
+- [x] **Step 5: Commit the extraction foundation**
 
 ```bash
 git add scripts/corpus/extraction.py tests/test_question_extraction.py
