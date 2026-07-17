@@ -76,7 +76,7 @@ description: 面试准备 / interview prep。当用户上传简历(PDF/图片)�
 
    `--output` 必须是一个**尚不存在**的目录。runner 会重新从 `raw_posts` 生成候选，再完成 `materialize_questions()`、`prepare_questions()` 和去重排序；它把输入副本、中间产物、排序题、拒绝项、诊断和 SHA-256 manifest 一起写入该目录。最终题面仍来自候选的 `display_text`,原文证据来自候选的 `excerpt`,不得手工替换。
 
-5b. **读取数据缺口。** 先检查 `<输出目录>/diagnostics.json`:其中包含无效 decision、候选/证据问题、过期来源计数和被拒绝项。它不执行搜索、爬虫、简历阅读、语义 decision 或最终备考文案；这些仍是前后显式步骤。正式备考包只允许读取 `<输出目录>/ranked_questions.json`;不得回退到 `materialized_questions.json`、旧缓存或人工拼接题目。
+5b. **读取数据缺口。** 先检查 `<输出目录>/diagnostics.json`:其中包含 decision 处理结果（包括明确不保留的候选）、候选/证据问题、过期来源计数和被拒绝项。它不执行搜索、爬虫、简历阅读、语义 decision 或最终备考文案；这些仍是前后显式步骤。正式备考包只允许读取 `<输出目录>/ranked_questions.json`;不得回退到 `materialized_questions.json`、旧缓存或人工拼接题目。
 
 6. **去重 & 排序。** runner 内部的 `prepare_questions()` 已完成证据与时效校验、按 `canonical_text` 去重和排序。排序优先考虑**独立来源 URL 数和时效**,出现次数只用于同分时破平。同一 URL 重复出现不能冒充多来源高频。只有至少 2 个经过 evidence 校验的独立来源支持的问题才称为“高频”;其余可作为“相关题”保留,但必须明确是单来源。
 
