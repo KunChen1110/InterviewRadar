@@ -669,19 +669,19 @@ git commit -m "feat: document evidence-first extraction workflow"
 **Files:**
 - Verify: `scripts/`, `tests/`, `README.md`, `SKILL.md`, `assets/schema.md`
 
-- [ ] **Step 1: Run the full suite**
+- [x] **Step 1: Run the full suite**
 
 Run: `../../.venv/bin/python -m pytest tests/ -q`
 
 Expected: all existing 115 tests plus the new extraction and persistence tests pass.
 
-- [ ] **Step 2: Compile production scripts**
+- [x] **Step 2: Compile production scripts**
 
 Run: `../../.venv/bin/python -m compileall -q scripts`
 
 Expected: exit code `0` with no output.
 
-- [ ] **Step 3: Check diff hygiene and public claims**
+- [x] **Step 3: Check diff hygiene and public claims**
 
 Run:
 
@@ -693,7 +693,7 @@ rg -n "extract_candidates|materialize_questions|ExtractionDecision|证据优先�
 Expected: no whitespace errors, and every public workflow reference points to a
 real function or schema.
 
-- [ ] **Step 4: Commit any final verification-only documentation correction**
+- [x] **Step 4: No additional documentation correction was required after verification**
 
 ```bash
 git add README.md SKILL.md assets/schema.md

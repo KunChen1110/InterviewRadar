@@ -53,6 +53,15 @@ def test_extract_candidates_skips_plain_narrative_and_is_stable():
     assert [item.candidate_id for item in first] == [item.candidate_id for item in second]
 
 
+def test_extract_candidates_cleans_inline_interviewer_and_list_prefixes():
+    post = _post("面试官问：1. 如何评估招聘渠道？")
+
+    candidates = extract_candidates([post])
+
+    assert [item.excerpt for item in candidates] == ["面试官问：1. 如何评估招聘渠道？"]
+    assert [item.display_text for item in candidates] == ["如何评估招聘渠道？"]
+
+
 def test_extract_candidates_derives_modality_from_raw_post_content():
     text = _post("你如何评估招聘渠道？")
     ocr = _post(
@@ -155,6 +164,22 @@ def test_materialize_rejects_bad_role_tags():
 
     assert result.questions == []
     assert [issue.code for issue in result.issues] == ["invalid_role_tags"]
+
+
+def test_materialize_rejects_non_string_decision_candidate_id():
+    candidate = ExtractionCandidate(
+        candidate_id="candidate_1",
+        source_url="https://example.com/post-1",
+        excerpt="如何评估招聘渠道？",
+        display_text="如何评估招聘渠道？",
+    )
+    decision = ExtractionDecision([], True, canonical_text="评估招聘渠道")
+
+    result = materialize_questions([candidate], [decision])
+
+    assert result.questions == []
+    assert [issue.code for issue in result.issues] == ["invalid_decision_candidate_id"]
+    assert result.rejected_decisions == [decision]
 
 
 def test_extraction_pipeline_requires_raw_post_evidence_before_ranking():

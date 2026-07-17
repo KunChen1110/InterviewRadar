@@ -43,7 +43,12 @@ class ExtractionCandidate:
 
 
 def _display_text(excerpt: str) -> str:
-    return _INTERVIEW_PREFIX.sub("", _LIST_PREFIX.sub("", excerpt)).strip()
+    display_text = excerpt.strip()
+    while True:
+        cleaned = _LIST_PREFIX.sub("", _INTERVIEW_PREFIX.sub("", display_text)).strip()
+        if cleaned == display_text:
+            return cleaned
+        display_text = cleaned
 
 
 def _candidate_id(source_url: str, line_number: int, excerpt: str) -> str:
@@ -159,6 +164,10 @@ def materialize_questions(
 
     for decision in decisions:
         candidate_id = decision.candidate_id
+        if not isinstance(candidate_id, str) or not candidate_id.strip():
+            issues.append(ExtractionIssue("invalid_decision_candidate_id"))
+            rejected.append(decision)
+            continue
         if candidate_id in seen_ids:
             issues.append(ExtractionIssue("duplicate_decision", candidate_id))
             rejected.append(decision)
