@@ -229,7 +229,7 @@ git commit -m "feat: extract immutable question candidates"
 - Modify: `scripts/corpus/extraction.py`
 - Modify: `tests/test_question_extraction.py`
 
-- [ ] **Step 1: Add failing materialization tests**
+- [x] **Step 1: Add failing materialization tests**
 
 Append these tests to `tests/test_question_extraction.py`:
 
@@ -325,13 +325,13 @@ def test_materialize_rejects_bad_role_tags():
     assert [issue.code for issue in result.issues] == ["invalid_role_tags"]
 ```
 
-- [ ] **Step 2: Run the materialization tests to verify they fail**
+- [x] **Step 2: Run the materialization tests to verify they fail**
 
 Run: `../../.venv/bin/python -m pytest tests/test_question_extraction.py -q`
 
 Expected: FAIL because `ExtractionDecision` and `materialize_questions` are not defined.
 
-- [ ] **Step 3: Implement decision schemas, diagnostics, and materialization**
+- [x] **Step 3: Implement decision schemas, diagnostics, and materialization**
 
 Append the following definitions to `scripts/corpus/extraction.py`. `rejected_decisions`
 must retain the original decision instances in input order so callers can write a
@@ -459,13 +459,13 @@ Add these imports at the top of `scripts/corpus/extraction.py`:
 from scripts.models import Question, QuestionEvidence, RawPost
 ```
 
-- [ ] **Step 4: Run the materialization tests to verify they pass**
+- [x] **Step 4: Run the materialization tests to verify they pass**
 
 Run: `../../.venv/bin/python -m pytest tests/test_question_extraction.py -q`
 
 Expected: `7 passed`.
 
-- [ ] **Step 5: Commit materialization**
+- [x] **Step 5: Commit materialization**
 
 ```bash
 git add scripts/corpus/extraction.py tests/test_question_extraction.py

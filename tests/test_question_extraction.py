@@ -1,4 +1,9 @@
-from scripts.corpus.extraction import extract_candidates
+from scripts.corpus.extraction import (
+    ExtractionCandidate,
+    ExtractionDecision,
+    extract_candidates,
+    materialize_questions,
+)
 from scripts.models import RawPost
 
 
@@ -64,3 +69,86 @@ def test_extract_candidates_derives_modality_from_raw_post_content():
         "ocr",
         "vision",
     ]
+
+
+def test_materialize_uses_candidate_text_and_immutable_evidence():
+    post = _post("面试官主要问：\n1. 如何评估招聘渠道？")
+    candidate = extract_candidates([post])[0]
+    decision = ExtractionDecision(
+        candidate_id=candidate.candidate_id,
+        accepted=True,
+        canonical_text="评估招聘渠道",
+        topic="招聘",
+        role_tags=["市场实习"],
+    )
+
+    result = materialize_questions([candidate], [decision])
+
+    assert result.issues == []
+    assert result.rejected_decisions == []
+    assert len(result.questions) == 1
+    question = result.questions[0]
+    assert question.text == "如何评估招聘渠道？"
+    assert question.canonical_text == "评估招聘渠道"
+    assert question.evidence[0].excerpt == "1. 如何评估招聘渠道？"
+    assert question.evidence[0].source_url == post.url
+    assert question.evidence[0].modality_origin == "text"
+
+
+def test_materialize_rejects_invalid_or_ambiguous_decisions_without_raising():
+    candidate = ExtractionCandidate(
+        candidate_id="candidate_1",
+        source_url="https://example.com/post-1",
+        excerpt="如何评估招聘渠道？",
+        display_text="如何评估招聘渠道？",
+    )
+    invalid = [
+        ExtractionDecision("missing", True, canonical_text="未知"),
+        ExtractionDecision("candidate_1", True, canonical_text=""),
+        ExtractionDecision("candidate_1", True, canonical_text="评估招聘渠道"),
+    ]
+
+    result = materialize_questions([candidate], invalid)
+
+    assert result.questions == []
+    assert [issue.code for issue in result.issues] == [
+        "unknown_candidate",
+        "missing_canonical_text",
+        "duplicate_decision",
+    ]
+    assert result.rejected_decisions == invalid
+
+
+def test_materialize_rejects_duplicate_candidates_without_raising():
+    candidate = ExtractionCandidate(
+        candidate_id="candidate_1",
+        source_url="https://example.com/post-1",
+        excerpt="如何评估招聘渠道？",
+        display_text="如何评估招聘渠道？",
+    )
+    decision = ExtractionDecision("candidate_1", True, canonical_text="评估招聘渠道")
+
+    result = materialize_questions([candidate, candidate], [decision])
+
+    assert result.questions == []
+    assert [issue.code for issue in result.issues] == [
+        "duplicate_candidate_id",
+        "unknown_candidate",
+    ]
+
+
+def test_materialize_rejects_bad_role_tags():
+    candidate = ExtractionCandidate(
+        candidate_id="candidate_1",
+        source_url="https://example.com/post-1",
+        excerpt="如何评估招聘渠道？",
+        display_text="如何评估招聘渠道？",
+    )
+    decision = ExtractionDecision(
+        "candidate_1", True, canonical_text="评估招聘渠道", role_tags=["市场", ""]
+    )
+
+    result = materialize_questions([candidate], [decision])
+
+    assert result.questions == []
+    assert [issue.code for issue in result.issues] == ["invalid_role_tags"]
