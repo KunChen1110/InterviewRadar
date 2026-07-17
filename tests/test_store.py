@@ -1,6 +1,14 @@
+from scripts.corpus.extraction import ExtractionCandidate, ExtractionDecision
 from scripts.models import Question, QuestionEvidence, RawPost
 from scripts.corpus.store import (
-    save_raw_posts, load_raw_posts, save_questions, load_questions,
+    load_extraction_candidates,
+    load_extraction_decisions,
+    load_questions,
+    load_raw_posts,
+    save_extraction_candidates,
+    save_extraction_decisions,
+    save_questions,
+    save_raw_posts,
 )
 
 
@@ -23,3 +31,22 @@ def test_questions_save_and_load(tmp_path):
     path = tmp_path / "q.json"
     save_questions(qs, path)
     assert load_questions(path) == qs
+
+
+def test_extraction_artifacts_save_and_load(tmp_path):
+    candidates = [
+        ExtractionCandidate(
+            "candidate_1", "u1", "1. 如何评估招聘渠道？", "如何评估招聘渠道？"
+        )
+    ]
+    decisions = [
+        ExtractionDecision("candidate_1", True, "评估招聘渠道", role_tags=["市场"])
+    ]
+
+    candidate_path = tmp_path / "candidates.json"
+    decision_path = tmp_path / "decisions.json"
+    save_extraction_candidates(candidates, candidate_path)
+    save_extraction_decisions(decisions, decision_path)
+
+    assert load_extraction_candidates(candidate_path) == candidates
+    assert load_extraction_decisions(decision_path) == decisions

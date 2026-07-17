@@ -5,6 +5,13 @@
   (ISO `YYYY-MM-DD`) or null for undated sources. Produced by connectors. Filtered to the recency
   window by `corpus/recency.py`. `raw_text` is the current best primary content for legacy pipeline
   compatibility; `locator_text` is source metadata for retrieval/filtering.
+- **ExtractionCandidate** `{ candidate_id, source_url, excerpt, display_text, posted_at, modality_origin }`
+  An immutable plausible question span. `excerpt` is the verbatim source proof;
+  `display_text` is a deterministic source-derived label with only list/framing
+  prefixes removed. It is not yet a validated question.
+- **ExtractionDecision** `{ candidate_id, accepted, canonical_text, topic, role_tags[] }`
+  The agent's constrained semantic decision for one candidate. It cannot provide
+  question wording, URLs, dates, or evidence excerpts.
 - **QuestionEvidence** `{ source_url, excerpt, posted_at(ISO date|null), modality_origin(text|ocr|vision) }`
   A verbatim source excerpt for one question occurrence. The quality pipeline verifies that the URL
   belongs to a retained RawPost and that the whitespace-normalized excerpt appears in its primary
