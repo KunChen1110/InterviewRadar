@@ -166,6 +166,33 @@ def test_materialize_rejects_bad_role_tags():
     assert [issue.code for issue in result.issues] == ["invalid_role_tags"]
 
 
+def test_materialize_reports_candidates_without_a_decision():
+    candidates = [
+        ExtractionCandidate(
+            candidate_id="candidate_1",
+            source_url="https://example.com/post-1",
+            excerpt="如何评估招聘渠道？",
+            display_text="如何评估招聘渠道？",
+        ),
+        ExtractionCandidate(
+            candidate_id="candidate_2",
+            source_url="https://example.com/post-2",
+            excerpt="RAG 系统如何评估效果？",
+            display_text="RAG 系统如何评估效果？",
+        ),
+    ]
+
+    result = materialize_questions(
+        candidates,
+        [ExtractionDecision("candidate_1", True, canonical_text="评估招聘渠道")],
+    )
+
+    assert [question.canonical_text for question in result.questions] == ["评估招聘渠道"]
+    assert [(issue.code, issue.candidate_id) for issue in result.issues] == [
+        ("missing_decision", "candidate_2")
+    ]
+
+
 def test_materialize_rejects_non_string_decision_candidate_id():
     candidate = ExtractionCandidate(
         candidate_id="candidate_1",
@@ -178,7 +205,10 @@ def test_materialize_rejects_non_string_decision_candidate_id():
     result = materialize_questions([candidate], [decision])
 
     assert result.questions == []
-    assert [issue.code for issue in result.issues] == ["invalid_decision_candidate_id"]
+    assert [issue.code for issue in result.issues] == [
+        "invalid_decision_candidate_id",
+        "missing_decision",
+    ]
     assert result.rejected_decisions == [decision]
 
 

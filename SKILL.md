@@ -74,9 +74,9 @@ description: 面试准备 / interview prep。当用户上传简历(PDF/图片)�
      --today YYYY-MM-DD
    ```
 
-   `--output` 必须是一个**尚不存在**的目录。runner 会重新从 `raw_posts` 生成候选，再完成 `materialize_questions()`、`prepare_questions()` 和去重排序；它把输入副本、中间产物、排序题、拒绝项、诊断和 SHA-256 manifest 一起写入该目录。最终题面仍来自候选的 `display_text`,原文证据来自候选的 `excerpt`,不得手工替换。
+   `--output` 必须是一个**尚不存在**的目录。runner 会重新从 `raw_posts` 生成候选，再完成 `materialize_questions()`、`prepare_questions()` 和去重排序；它把输入副本、中间产物、排序题、拒绝项、诊断和 SHA-256 manifest 一起写入该目录。manifest 还会记录实际用于时效判断的 `today`;正式复跑应显式传入同一日期。最终题面仍来自候选的 `display_text`,原文证据来自候选的 `excerpt`,不得手工替换。
 
-5b. **读取数据缺口。** 先检查 `<输出目录>/diagnostics.json`:其中包含 decision 处理结果（包括明确不保留的候选）、候选/证据问题、过期来源计数和被拒绝项。它不执行搜索、爬虫、简历阅读、语义 decision 或最终备考文案；这些仍是前后显式步骤。正式备考包只允许读取 `<输出目录>/ranked_questions.json`;不得回退到 `materialized_questions.json`、旧缓存或人工拼接题目。
+5b. **读取数据缺口。** 先检查 `<输出目录>/diagnostics.json`:其中包含 decision 处理结果（包括明确不保留或漏决策的候选）、候选/证据问题、过期来源计数和被拒绝项。它不执行搜索、爬虫、简历阅读、语义 decision 或最终备考文案；这些仍是前后显式步骤。正式备考包只允许读取 `<输出目录>/ranked_questions.json`;不得回退到 `materialized_questions.json`、旧缓存或人工拼接题目。
 
 6. **去重 & 排序。** runner 内部的 `prepare_questions()` 已完成证据与时效校验、按 `canonical_text` 去重和排序。排序优先考虑**独立来源 URL 数和时效**,出现次数只用于同分时破平。同一 URL 重复出现不能冒充多来源高频。只有至少 2 个经过 evidence 校验的独立来源支持的问题才称为“高频”;其余可作为“相关题”保留,但必须明确是单来源。
 
@@ -231,8 +231,8 @@ description: 面试准备 / interview prep。当用户上传简历(PDF/图片)�
 
 模板约束:
 - 全文中文,但技术名词可保留英文。
-- 第 4 节的题目必须来自 `Question` 或明确可追溯的 `RawPost.content_text/raw_text`;小红书 caption/tag 只作为 `locator_text` 辅助,不能单独生成题目。
-- 第 4 节只允许使用 `prepare_questions().ranked_questions`;每个来源都必须展示已校验的 `QuestionEvidence.excerpt`。只有 URL、没有原文片段的题不能进入高频区。
+- 第 4 节的题目只能来自本次运行包的 `<输出目录>/ranked_questions.json`;它的每条 `QuestionEvidence.excerpt` 必须可追溯到本次运行包中的 `raw_posts.json`。小红书 caption/tag 只作为 `locator_text` 辅助,不能单独生成题目。
+- 不得直接向模板输入任意 `Question`、`RawPost.content_text/raw_text` 或手工调用 `prepare_questions()` 的结果来绕过运行包。只有 URL、没有原文片段的题不能进入高频区。
 - 高频题优先按 `dedupe_and_rank` 结果排序;人工调整时只能因岗位相关性或简历匹配度调整,并说明依据。称为“高频”的题必须至少有 2 个独立来源 URL;不足时改写为“相关题 Top N”。
 - 来源 URL 必须真实存在于 `source_refs` 或 RawPost.url;不要写"综合资料"这类不可追溯来源。
 - 自我介绍和简历表述可以做表达优化,但事实必须来自简历或真实面经。

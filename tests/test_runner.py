@@ -1,6 +1,9 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from hashlib import sha256
 import json
+from pathlib import Path
+from threading import Barrier
 
 import pytest
 
@@ -76,6 +79,7 @@ def test_run_pipeline_writes_auditable_package(tmp_path):
 
     manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["schema_version"] == 1
+    assert manifest["run_config"] == {"today": "2026-07-17"}
     assert manifest["input_sha256"] == {
         "raw_posts": _sha256(raw_posts_path),
         "extraction_decisions": _sha256(decisions_path),
@@ -141,6 +145,70 @@ def test_existing_destination_is_never_overwritten(tmp_path):
         runner.run_pipeline(raw_posts_path, decisions_path, output_dir, today=TODAY)
 
     assert sentinel.read_text(encoding="utf-8") == "do not replace"
+
+
+def test_reserving_output_directory_is_atomic(tmp_path):
+    output_dir = tmp_path / "runs" / "reserved"
+
+    runner._reserve_output_directory(output_dir)
+
+    assert output_dir.is_dir()
+    with pytest.raises(FileExistsError, match="output directory already exists"):
+        runner._reserve_output_directory(output_dir)
+
+
+def test_concurrent_runs_allow_only_one_output_reservation(tmp_path):
+    raw_posts_path, decisions_path = _inputs(tmp_path)
+    output_dir = tmp_path / "runs" / "contended"
+    barrier = Barrier(2)
+
+    def run_once():
+        barrier.wait()
+        try:
+            runner.run_pipeline(raw_posts_path, decisions_path, output_dir, today=TODAY)
+        except FileExistsError:
+            return "already_exists"
+        return "created"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = list(executor.map(lambda _: run_once(), range(2)))
+
+    assert sorted(outcomes) == ["already_exists", "created"]
+    assert (output_dir / "manifest.json").is_file()
+
+
+def test_pipeline_parses_the_same_input_snapshot_that_it_hashes(tmp_path, monkeypatch):
+    raw_posts_path, decisions_path = _inputs(tmp_path)
+    original_hash = _sha256(raw_posts_path)
+    original_read_bytes = Path.read_bytes
+
+    def read_then_replace_source(path):
+        snapshot = original_read_bytes(path)
+        if path == raw_posts_path:
+            save_raw_posts(
+                [
+                    RawPost(
+                        source="fixture",
+                        url="https://example.com/replaced",
+                        post_type="text",
+                        raw_text="面试官主要问：\\n1. 如何设计 Agent 记忆？",
+                        posted_at="2026-06-01",
+                    )
+                ],
+                path,
+            )
+        return snapshot
+
+    monkeypatch.setattr(Path, "read_bytes", read_then_replace_source)
+    output_dir = tmp_path / "runs" / "snapshot"
+
+    result = runner.run_pipeline(raw_posts_path, decisions_path, output_dir, today=TODAY)
+
+    manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["input_sha256"]["raw_posts"] == original_hash
+    assert [question.canonical_text for question in result.ranked_questions] == [
+        "评估 RAG 系统效果"
+    ]
 
 
 def test_parse_today_accepts_only_iso_calendar_dates():

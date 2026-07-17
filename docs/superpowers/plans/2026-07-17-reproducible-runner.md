@@ -6,7 +6,19 @@
 
 **Architecture:** scripts/corpus/runner.py composes the existing store, extraction, and quality modules without duplicating their domain rules. It writes canonical artifacts to a sibling staging directory, hashes finalized artifacts into a versioned manifest, then publishes a fresh destination directory. All end-to-end tests use local RawPost and ExtractionDecision fixtures only.
 
-**Tech Stack:** Python 3.11+, argparse, dataclasses, datetime, hashlib, json, pathlib, shutil, tempfile, pytest, GitHub Actions.
+**Tech Stack:** Python 3.11+, argparse, dataclasses, datetime, hashlib, json, pathlib, shutil, pytest, GitHub Actions.
+
+---
+
+## Post-Review Corrections
+
+The initial staging-and-rename sketch had a destination race and read each
+input twice. The implemented runner instead atomically reserves the output
+directory with `mkdir()`, removes that owned directory on failure, snapshots
+each input once before hashing and parsing, writes the effective `today` value
+to `manifest.json`, and reports every extracted candidate lacking a decision as
+`missing_decision`. These changes preserve the plan's public artifact contract
+while closing integrity gaps found during review.
 
 ---
 

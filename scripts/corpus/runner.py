@@ -7,19 +7,20 @@ from hashlib import sha256
 import json
 from pathlib import Path
 import shutil
-import tempfile
 
-from scripts.corpus.extraction import extract_candidates, materialize_questions
+from scripts.corpus.extraction import (
+    ExtractionDecision,
+    extract_candidates,
+    materialize_questions,
+)
 from scripts.corpus.quality import prepare_questions
 from scripts.corpus.store import (
-    load_extraction_decisions,
-    load_raw_posts,
     save_extraction_candidates,
     save_extraction_decisions,
     save_questions,
     save_raw_posts,
 )
-from scripts.models import Question
+from scripts.models import Question, RawPost
 
 
 _ARTIFACT_NAMES = (
@@ -42,6 +43,19 @@ class PipelineRunResult:
 
 def _sha256(path: Path) -> str:
     return sha256(path.read_bytes()).hexdigest()
+
+
+def _read_input_snapshot(path: Path) -> tuple[bytes, str]:
+    snapshot = path.read_bytes()
+    return snapshot, sha256(snapshot).hexdigest()
+
+
+def _raw_posts_from_snapshot(snapshot: bytes) -> list[RawPost]:
+    return [RawPost.from_dict(item) for item in json.loads(snapshot)]
+
+
+def _decisions_from_snapshot(snapshot: bytes) -> list[ExtractionDecision]:
+    return [ExtractionDecision.from_dict(item) for item in json.loads(snapshot)]
 
 
 def _write_json(path: Path, payload: object) -> None:
@@ -88,9 +102,11 @@ def _manifest(
     decisions: list,
     materialized,
     prepared,
+    reference_date: date,
 ) -> dict[str, object]:
     return {
         "schema_version": 1,
+        "run_config": {"today": reference_date.isoformat()},
         "input_sha256": input_sha256,
         "artifact_sha256": {
             name: _sha256(path) for name, path in artifact_paths.items()
@@ -110,9 +126,12 @@ def _manifest(
     }
 
 
-def _ensure_new_output_directory(output_dir: Path) -> None:
-    if output_dir.exists() or output_dir.is_symlink():
-        raise FileExistsError(f"output directory already exists: {output_dir}")
+def _reserve_output_directory(output_dir: Path) -> None:
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        output_dir.mkdir()
+    except FileExistsError as exc:
+        raise FileExistsError(f"output directory already exists: {output_dir}") from exc
 
 
 def run_pipeline(
@@ -125,32 +144,34 @@ def run_pipeline(
     raw_posts_path = Path(raw_posts_path)
     decisions_path = Path(decisions_path)
     output_dir = Path(output_dir)
-    _ensure_new_output_directory(output_dir)
-
-    input_sha256 = {
-        "raw_posts": _sha256(raw_posts_path),
-        "extraction_decisions": _sha256(decisions_path),
-    }
-    raw_posts = load_raw_posts(raw_posts_path)
-    decisions = load_extraction_decisions(decisions_path)
-    candidates = extract_candidates(raw_posts)
-    materialized = materialize_questions(candidates, decisions)
-    prepared = prepare_questions(raw_posts, materialized.questions, today=today)
-
-    output_dir.parent.mkdir(parents=True, exist_ok=True)
-    stage_dir = Path(
-        tempfile.mkdtemp(prefix=f".{output_dir.name}.tmp-", dir=output_dir.parent)
-    )
+    _reserve_output_directory(output_dir)
     try:
-        save_raw_posts(raw_posts, stage_dir / "raw_posts.json")
-        save_extraction_decisions(decisions, stage_dir / "extraction_decisions.json")
-        save_extraction_candidates(candidates, stage_dir / "extraction_candidates.json")
-        save_questions(materialized.questions, stage_dir / "materialized_questions.json")
-        save_questions(prepared.ranked_questions, stage_dir / "ranked_questions.json")
-        save_questions(prepared.rejected_questions, stage_dir / "rejected_questions.json")
-        _write_json(stage_dir / "diagnostics.json", _diagnostics(materialized, prepared))
+        reference_date = today or date.today()
+        raw_posts_snapshot, raw_posts_sha256 = _read_input_snapshot(raw_posts_path)
+        decisions_snapshot, decisions_sha256 = _read_input_snapshot(decisions_path)
+        input_sha256 = {
+            "raw_posts": raw_posts_sha256,
+            "extraction_decisions": decisions_sha256,
+        }
+        raw_posts = _raw_posts_from_snapshot(raw_posts_snapshot)
+        decisions = _decisions_from_snapshot(decisions_snapshot)
+        candidates = extract_candidates(raw_posts)
+        materialized = materialize_questions(candidates, decisions)
+        prepared = prepare_questions(
+            raw_posts,
+            materialized.questions,
+            today=reference_date,
+        )
 
-        artifact_paths = {name: stage_dir / name for name in _ARTIFACT_NAMES}
+        save_raw_posts(raw_posts, output_dir / "raw_posts.json")
+        save_extraction_decisions(decisions, output_dir / "extraction_decisions.json")
+        save_extraction_candidates(candidates, output_dir / "extraction_candidates.json")
+        save_questions(materialized.questions, output_dir / "materialized_questions.json")
+        save_questions(prepared.ranked_questions, output_dir / "ranked_questions.json")
+        save_questions(prepared.rejected_questions, output_dir / "rejected_questions.json")
+        _write_json(output_dir / "diagnostics.json", _diagnostics(materialized, prepared))
+
+        artifact_paths = {name: output_dir / name for name in _ARTIFACT_NAMES}
         manifest = _manifest(
             input_sha256,
             artifact_paths,
@@ -159,12 +180,11 @@ def run_pipeline(
             decisions,
             materialized,
             prepared,
+            reference_date,
         )
-        _write_json(stage_dir / "manifest.json", manifest)
-        _ensure_new_output_directory(output_dir)
-        stage_dir.rename(output_dir)
+        _write_json(output_dir / "manifest.json", manifest)
     except BaseException:
-        shutil.rmtree(stage_dir, ignore_errors=True)
+        shutil.rmtree(output_dir, ignore_errors=True)
         raise
 
     return PipelineRunResult(
@@ -199,4 +219,3 @@ def _main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(_main())
-
