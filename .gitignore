@@ -1,4 +1,5 @@
 .venv/
+.worktrees/
 
 # User-generated corpus / outputs / artifacts — never commit
 # These contain real resumes, scraped content, and personal prep packages.
