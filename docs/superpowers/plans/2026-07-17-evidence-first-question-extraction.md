@@ -479,7 +479,7 @@ git commit -m "feat: materialize questions from constrained decisions"
 - Modify: `tests/test_store.py`
 - Modify: `assets/schema.md`
 
-- [ ] **Step 1: Write failing persistence tests**
+- [x] **Step 1: Write failing persistence tests**
 
 Append to `tests/test_store.py`:
 
@@ -510,13 +510,13 @@ def test_extraction_artifacts_save_and_load(tmp_path):
     assert load_extraction_decisions(decision_path) == decisions
 ```
 
-- [ ] **Step 2: Run the persistence test to verify it fails**
+- [x] **Step 2: Run the persistence test to verify it fails**
 
 Run: `../../.venv/bin/python -m pytest tests/test_store.py -q`
 
 Expected: FAIL during collection because the new store helpers do not exist.
 
-- [ ] **Step 3: Add store helpers**
+- [x] **Step 3: Add store helpers**
 
 Add imports and helpers to `scripts/corpus/store.py`:
 
@@ -562,13 +562,13 @@ Add the following two entries before `QuestionEvidence` in `assets/schema.md`:
   question wording, URLs, dates, or evidence excerpts.
 ```
 
-- [ ] **Step 4: Run persistence tests to verify they pass**
+- [x] **Step 4: Run persistence tests to verify they pass**
 
 Run: `../../.venv/bin/python -m pytest tests/test_store.py -q`
 
 Expected: `3 passed`.
 
-- [ ] **Step 5: Commit persistence and schema**
+- [x] **Step 5: Commit persistence and schema**
 
 ```bash
 git add scripts/corpus/store.py tests/test_store.py assets/schema.md
