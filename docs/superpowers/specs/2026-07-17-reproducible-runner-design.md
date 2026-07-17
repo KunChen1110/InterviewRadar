@@ -1,6 +1,6 @@
 # Reproducible Corpus Runner Design
 
-**Date:** 2026-07-17  
+**Date:** 2026-07-17
 **Status:** Approved for implementation under the repository owner's standing
 autonomous-product-direction instruction
 
