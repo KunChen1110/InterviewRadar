@@ -10,6 +10,10 @@
 
 ---
 
+> **Implementation status:** Complete. The task code blocks below preserve the
+> original test-first plan. When they conflict with the post-review corrections,
+> they are historical only and must not be used as an implementation reference.
+
 ## Post-Review Corrections
 
 The initial staging-and-rename sketch had a destination race and read each
@@ -338,6 +342,12 @@ that would make the manifest self-referential. Do not include input paths,
 absolute paths, timestamps, or random values in generated JSON.
 
 - [ ] **Step 3: Add run_pipeline with staging and no-overwrite protection**
+
+> **Superseded during review:** This staging-and-rename sketch has a
+> check-then-rename race. The final implementation atomically reserves
+> `output_dir` with `mkdir()`, writes artifacts there, and removes that owned
+> directory on failure. See the Post-Review Corrections section and
+> `scripts/corpus/runner.py` for the authoritative behavior.
 
 ~~~python
 def run_pipeline(

@@ -71,7 +71,7 @@ The runner performs these operations in this exact order:
 2. Extract immutable evidence candidates with `extract_candidates(raw_posts)`.
 3. Materialize source-derived questions with
    `materialize_questions(candidates, decisions)`.
-4. Apply `prepare_questions(materialized_questions, today=today)`.
+4. Apply `prepare_questions(raw_posts, materialized_questions, today=today)`.
 5. Write a fresh run directory containing canonical copies of inputs,
    extraction artifacts, quality output, and a manifest.
 
