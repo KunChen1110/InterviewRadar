@@ -6,6 +6,8 @@
 
 **基于真实面经,从你的简历自动生成项目锚定的个性化中文面试备考包**
 
+[简体中文](README.md) · [English](README.en.md)
+
 [![tests](https://github.com/KunChen1110/InterviewRadar/actions/workflows/tests.yml/badge.svg)](https://github.com/KunChen1110/InterviewRadar/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](#)
